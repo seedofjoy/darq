@@ -1,5 +1,5 @@
 pytest
-pytest-aiohttp
+pytest-asyncio
 mypy
 flake8
 flake8-quotes

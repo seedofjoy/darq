@@ -3,3 +3,4 @@ exclude=.git,.venv
 max-line-length=80
 multiline-quotes = '''
 import-order-style=smarkets
+application-import-names=darq
