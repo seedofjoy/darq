@@ -8,3 +8,4 @@ flake8-builtins
 flake8-import-order
 flake8-print
 flake8-commas
+typing_extensions==3.7.4
