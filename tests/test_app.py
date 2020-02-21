@@ -32,7 +32,7 @@ async def test_darq_connect_disconnect():
 
 
 @pytest.mark.asyncio
-async def test_task_decorator(caplog, worker_factory):
+async def test_task_decorator(caplog, arq_redis, worker_factory):
     caplog.set_level(logging.INFO)
 
     darq = Darq(darq_config)
@@ -47,7 +47,7 @@ async def test_task_decorator(caplog, worker_factory):
 
     await foobar_task.delay(a=1, _job_id='testing')
 
-    worker = await worker_factory(darq.get_worker_settings())
+    worker = await worker_factory(darq)
     assert worker.jobs_complete == 0
     assert worker.jobs_failed == 0
     assert worker.jobs_retried == 0

@@ -19,13 +19,12 @@ async def arq_redis():
 
 
 @pytest.fixture
-async def worker_factory(arq_redis):
+async def worker_factory():
     worker_ = None
 
-    async def create(worker_settings):
+    async def create(darq, queue=None):
         nonlocal worker_
-        worker_settings['redis_pool'] = arq_redis
-        worker_ = create_worker(worker_settings)
+        worker_ = create_worker(darq, queue=queue)
         return worker_
 
     yield create
