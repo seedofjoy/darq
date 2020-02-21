@@ -3,7 +3,7 @@ import importlib
 import typing as t
 
 import arq
-from arq.constants import default_queue_name
+from arq.connections import ArqRedis
 
 from .registry import Registry
 from .types import AnyCallable
@@ -18,16 +18,39 @@ class DarqConnectionError(DarqException):
     pass
 
 
+class DarqConfigError(DarqException):
+    pass
+
+
 class Darq:
 
     def __init__(self, config: t.Dict[str, t.Any]) -> None:
         self.registry = Registry()
         self.config = config
+        if 'functions' in self.config:
+            raise DarqConfigError(
+                '"functions" should not exist in config, all functions will '
+                'be collected automatically. Just wrap your functions with '
+                '@darq.task decorator',
+            )
+        if 'queue_name' in self.config:
+            raise DarqConfigError(
+                '"queue_name" should not exist in config. '
+                'To specify queue in worker - use "-Q" arg in cli.',
+            )
         self.redis: t.Optional[arq.ArqRedis] = None
-        self.connected = False
+        if config.get('redis_pool'):
+            self.redis = config['redis_pool']
+        self.connected = bool(self.redis)
 
-    async def connect(self) -> None:
-        self.redis = await arq.create_pool(self.config['redis_settings'])
+    async def connect(self, redis_pool: t.Optional[ArqRedis] = None) -> None:
+        if self.connected:
+            return
+
+        if redis_pool:
+            self.redis = redis_pool
+        else:
+            self.redis = await arq.create_pool(self.config['redis_settings'])
         self.connected = True
 
     async def disconnect(self) -> None:
@@ -42,17 +65,6 @@ class Darq:
     def autodiscover_tasks(self, packages: t.Sequence[str]) -> None:
         for pkg in packages:
             importlib.import_module(pkg)
-
-    def get_worker_settings(
-            self, queue: t.Optional[str] = None,
-    ) -> t.Dict[str, t.Any]:
-        return {
-            **self.config,
-            **{
-                'functions': self.registry.get_function_names(),
-                'queue_name': queue or default_queue_name,
-            },
-        }
 
     def task(
             self,

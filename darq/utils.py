@@ -4,8 +4,10 @@ from .types import AnyCallable
 
 
 def get_function_name(func: AnyCallable) -> str:
-    module = func.__module__
-    if module == '__main__':
-        module = inspect.getmodule(func).__spec__.name  # type: ignore
+    module_str = func.__module__
+    if module_str == '__main__':
+        module = inspect.getmodule(func)
+        if module and module.__spec__:
+            module_str = module.__spec__.name
 
-    return f'{module}.{func.__name__}'
+    return f'{module_str}.{func.__name__}'

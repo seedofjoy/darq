@@ -3,12 +3,11 @@ import os
 import sys
 
 import click
-from arq.constants import default_queue_name
 from arq.logs import default_log_config
-from arq.worker import check_health
 from pydantic.utils import import_string
 
 from .app import Darq
+from .worker import check_health
 from .worker import run_worker
 
 health_check_help = 'Health Check: run a health check and exit.'
@@ -19,7 +18,7 @@ verbose_help = 'Enable verbose output.'
 @click.argument('darq-app', type=str, required=True)
 @click.option('--check', is_flag=True, help=health_check_help)
 @click.option('-v', '--verbose', is_flag=True, help=verbose_help)
-@click.option('-Q', '--queue', type=str, default=default_queue_name)
+@click.option('-Q', '--queue', type=str, default=None)
 def cli(*, darq_app: str, check: bool, verbose: bool, queue: str) -> None:
     """
     Job queues in python with asyncio and redis.
@@ -37,18 +36,10 @@ def cli(*, darq_app: str, check: bool, verbose: bool, queue: str) -> None:
 
     logging.config.dictConfig(default_log_config(verbose))
 
-    worker_settings = {
-        **darq.config,
-        **{
-            'functions': darq.registry.get_function_names(),
-            'queue_name': queue,
-        },
-    }
-
     if check:
-        exit(check_health(worker_settings))
+        exit(check_health(darq))
     else:
-        run_worker(worker_settings)
+        run_worker(darq, queue)
 
 
 if __name__ == '__main__':
