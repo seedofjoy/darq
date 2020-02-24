@@ -72,7 +72,7 @@ class Darq:
         for pkg in packages:
             importlib.import_module(pkg)
 
-    def add_cron_jobs(self, *jobs: t.Sequence[CronJob]) -> None:
+    def add_cron_jobs(self, *jobs: CronJob) -> None:
         for job in jobs:
             if not isinstance(job, CronJob):
                 raise ValueError(f'{job!r} must be instance of CronJob')

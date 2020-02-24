@@ -1,7 +1,16 @@
+import pathlib
+
 import setuptools
 
-with open('README.md', 'r') as f:
-    long_description = f.read()
+
+def readfile(filename: str) -> str:
+    return pathlib.Path(filename).read_text('utf-8').strip()
+
+
+long_description = '\n\n'.join((
+    readfile('README.md'),
+    readfile('CHANGES.md'),
+))
 
 setuptools.setup(
     name='darq',
@@ -13,10 +22,16 @@ setuptools.setup(
     long_description_content_type='text/markdown',
     url='https://github.com/seedofjoy/darq',
     packages=['darq'],
+    package_data={'darq': ['py.typed']},
     classifiers=[
-        'Programming Language :: Python :: 3',
+        'Environment :: Console',
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Typing :: Typed',
     ],
     install_requires=[
         'arq>=0.18,<0.19',
