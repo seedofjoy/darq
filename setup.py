@@ -5,7 +5,7 @@ with open('README.md', 'r') as f:
 
 setuptools.setup(
     name='darq',
-    version='0.0.1',
+    version='0.0.2',
     author='Igor Mozharovsky',
     author_email='igor.mozharovsky@gmail.com',
     description='A small wrapper around arq',
