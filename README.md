@@ -4,6 +4,10 @@
 
 A small wrapper around arq
 
+## Features
+* Celery-like `@task` decorator, adds `.delay()` to enqueue job
+* Graceful shutdown: waits until running tasks are finished
+
 ## Quick start
 
 ```python
