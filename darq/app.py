@@ -4,6 +4,7 @@ import typing as t
 
 import arq
 from arq.connections import ArqRedis
+from arq.cron import CronJob
 
 from .registry import Registry
 from .types import AnyCallable
@@ -26,18 +27,23 @@ class Darq:
 
     def __init__(self, config: t.Dict[str, t.Any]) -> None:
         self.registry = Registry()
-        self.config = config
+        self.config = config.copy()
         if 'functions' in self.config:
             raise DarqConfigError(
                 '"functions" should not exist in config, all functions will '
                 'be collected automatically. Just wrap your functions with '
-                '@darq.task decorator',
+                '@darq.task decorator.',
             )
         if 'queue_name' in self.config:
             raise DarqConfigError(
                 '"queue_name" should not exist in config. '
                 'To specify queue in worker - use "-Q" arg in cli.',
             )
+        if not self.config.get('cron_jobs'):
+            self.config['cron_jobs'] = []
+        if not isinstance(self.config['cron_jobs'], list):
+            self.config['cron_jobs'] = list(self.config['cron_jobs'])
+
         self.redis: t.Optional[arq.ArqRedis] = None
         if config.get('redis_pool'):
             self.redis = config['redis_pool']
@@ -65,6 +71,12 @@ class Darq:
     def autodiscover_tasks(self, packages: t.Sequence[str]) -> None:
         for pkg in packages:
             importlib.import_module(pkg)
+
+    def add_cron_jobs(self, *jobs: t.Sequence[CronJob]) -> None:
+        for job in jobs:
+            if not isinstance(job, CronJob):
+                raise ValueError(f'{job!r} must be instance of CronJob')
+        self.config['cron_jobs'].extend(jobs)
 
     def task(
             self,
