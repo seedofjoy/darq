@@ -1,6 +1,7 @@
 ## Changelog
 
 ### dev (unpublished)
+* `.delay()` now returns `arq_redis.enqueue_job` result (`Optional[Job]`)
 * Add `py.typed` file
 * Fixed `add_cron_jobs` typing
 

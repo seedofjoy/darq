@@ -5,6 +5,7 @@ import typing as t
 import arq
 from arq.connections import ArqRedis
 from arq.cron import CronJob
+from arq.jobs import Job
 
 from .registry import Registry
 from .types import AnyCallable
@@ -96,7 +97,7 @@ class Darq:
             )
             self.registry.add(worker_func)
 
-            async def delay(*args: t.Any, **kwargs: t.Any) -> None:
+            async def delay(*args: t.Any, **kwargs: t.Any) -> t.Optional[Job]:
                 if queue:
                     kwargs['_queue_name'] = queue
                 if not self.connected or not self.redis:
@@ -105,7 +106,7 @@ class Darq:
                         '"await <darq_instance>.connect()" before calling '
                         'this function',
                     )
-                await self.redis.enqueue_job(name, *args, **kwargs)
+                return await self.redis.enqueue_job(name, *args, **kwargs)
 
             function.delay = delay  # type: ignore
             return function
