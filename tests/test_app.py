@@ -10,10 +10,17 @@ from darq.app import DarqConnectionError
 from . import redis_settings
 
 darq_config = {'redis_settings': redis_settings, 'burst': True}
+darq = Darq(darq_config)
 
 
-async def foobar(ctx, a: int) -> int:
+@darq.task
+async def foobar(a: int) -> int:
     return 42 + a
+
+
+@darq.task
+async def foobar_with_ctx(a: int, _ctx):
+    pass
 
 
 @pytest.mark.asyncio
@@ -32,20 +39,23 @@ async def test_darq_connect_disconnect():
 
 
 @pytest.mark.asyncio
+async def test_darq_not_connected():
+    with pytest.raises(DarqConnectionError):
+        await foobar.delay()
+
+
+@pytest.mark.asyncio
+async def test_job_works_like_function():
+    assert await foobar(2) == 44
+    assert await foobar(a=5) == 47
+
+
+@pytest.mark.asyncio
 async def test_task_decorator(caplog, arq_redis, worker_factory):
     caplog.set_level(logging.INFO)
-
-    darq = Darq(darq_config)
-
-    foobar_task = darq.task(foobar)
-    assert await foobar_task(None, 2) == 42 + 2
-
-    with pytest.raises(DarqConnectionError):
-        await foobar_task.delay()
-
     await darq.connect()
 
-    await foobar_task.delay(a=1, _job_id='testing')
+    await foobar.delay(a=1, _job_id='testing')
 
     worker = await worker_factory(darq)
     assert worker.jobs_complete == 0
@@ -64,6 +74,11 @@ async def test_task_decorator(caplog, arq_redis, worker_factory):
         'X.XXs → testing:tests.test_app.foobar(a=1)\n'
         'X.XXs ← testing:tests.test_app.foobar ● 43'
     ) in log
+
+
+@pytest.mark.asyncio
+async def test_task_decorator_with_ctx(worker_factory):
+    pass
 
 
 @pytest.mark.asyncio
