@@ -27,7 +27,7 @@ class Worker(ArqWorker):
 
     def get_settings(self, queue: str) -> t.Dict[str, t.Any]:
         settings = {**self.darq_app.config}
-        settings['functions'] = self.darq_app.registry.get_function_names()
+        settings['functions'] = self.darq_app.registry.get_functions()
         if queue:
             settings['queue_name'] = queue
 

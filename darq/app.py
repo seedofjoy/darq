@@ -1,4 +1,5 @@
 import datetime
+import functools
 import importlib
 import typing as t
 
@@ -10,6 +11,7 @@ from arq.jobs import Job
 from .registry import Registry
 from .types import AnyCallable
 from .utils import get_function_name
+from .utils import split_job_ctx_from_args
 
 
 class DarqException(Exception):
@@ -40,10 +42,10 @@ class Darq:
                 '"queue_name" should not exist in config. '
                 'To specify queue in worker - use "-Q" arg in cli.',
             )
-        if not self.config.get('cron_jobs'):
-            self.config['cron_jobs'] = []
-        if not isinstance(self.config['cron_jobs'], list):
-            self.config['cron_jobs'] = list(self.config['cron_jobs'])
+
+        cron_jobs = self.config.pop('cron_jobs', [])
+        self.config['cron_jobs'] = []
+        self.add_cron_jobs(*cron_jobs)
 
         self.redis: t.Optional[arq.ArqRedis] = None
         if config.get('redis_pool'):
@@ -74,10 +76,30 @@ class Darq:
             importlib.import_module(pkg)
 
     def add_cron_jobs(self, *jobs: CronJob) -> None:
+        registered_coroutines = set(
+            arq_func.coroutine for arq_func in self.registry.values()
+        )
         for job in jobs:
             if not isinstance(job, CronJob):
-                raise ValueError(f'{job!r} must be instance of CronJob')
-        self.config['cron_jobs'].extend(jobs)
+                raise DarqException(f'{job!r} must be instance of CronJob')
+            if job.coroutine not in registered_coroutines:
+                raise DarqException(
+                    f'{job.coroutine!r} is not registered. '
+                    'Please, wrap it with @task decorator.',
+                )
+            self.config['cron_jobs'].append(job)
+
+    def wrap_job_coroutine(
+            self, function: t.Callable[..., t.Any],
+    ) -> t.Callable[..., t.Any]:
+
+        @functools.wraps(function)
+        async def wrapper(*args: t.Any, **kwargs: t.Any) -> t.Any:
+            ctx, splitted_args = split_job_ctx_from_args(args)
+            result = await function(*splitted_args, **kwargs)
+            return result
+
+        return wrapper
 
     def task(
             self,
@@ -90,6 +112,7 @@ class Darq:
     ) -> t.Any:
 
         def _decorate(function: AnyCallable) -> AnyCallable:
+            function = self.wrap_job_coroutine(function)
             name = get_function_name(function)
             worker_func = arq.worker.func(
                 coroutine=function, name=name, keep_result=keep_result,

@@ -12,7 +12,7 @@ from . import redis_settings
 darq_config = {'redis_settings': redis_settings, 'burst': True}
 
 
-async def foobar(ctx, a: int) -> int:
+async def foobar(a: int) -> int:
     return 42 + a
 
 
@@ -32,16 +32,28 @@ async def test_darq_connect_disconnect():
 
 
 @pytest.mark.asyncio
+async def test_darq_not_connected():
+    darq = Darq(darq_config)
+    foobar_task = darq.task(foobar)
+    with pytest.raises(DarqConnectionError):
+        await foobar_task.delay()
+
+
+@pytest.mark.asyncio
+async def test_job_works_like_a_function():
+    darq = Darq(darq_config)
+    foobar_task = darq.task(foobar)
+    assert await foobar_task(2) == 44
+    assert await foobar_task(a=5) == 47
+
+
+@pytest.mark.asyncio
 async def test_task_decorator(caplog, arq_redis, worker_factory):
     caplog.set_level(logging.INFO)
 
     darq = Darq(darq_config)
 
     foobar_task = darq.task(foobar)
-    assert await foobar_task(None, 2) == 42 + 2
-
-    with pytest.raises(DarqConnectionError):
-        await foobar_task.delay()
 
     await darq.connect()
 
