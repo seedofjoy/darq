@@ -19,7 +19,7 @@ async def arq_redis():
 
 
 @pytest.fixture
-async def worker_factory():
+async def worker_factory(arq_redis):
     worker_ = None
 
     async def create(darq, queue=None):

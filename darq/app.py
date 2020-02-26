@@ -10,8 +10,8 @@ from arq.jobs import Job
 
 from .registry import Registry
 from .types import AnyCallable
+from .types import JobCtx
 from .utils import get_function_name
-from .utils import split_job_ctx_from_args
 
 
 class DarqException(Exception):
@@ -28,8 +28,15 @@ class DarqConfigError(DarqException):
 
 class Darq:
 
-    def __init__(self, config: t.Dict[str, t.Any]) -> None:
+    def __init__(
+            self,
+            config: t.Dict[str, t.Any],
+            on_job_prerun: t.Optional[t.Callable[..., t.Any]] = None,
+            on_job_postrun: t.Optional[t.Callable[..., t.Any]] = None,
+    ) -> None:
         self.registry = Registry()
+        self.on_job_prerun = on_job_prerun
+        self.on_job_postrun = on_job_postrun
         self.config = config.copy()
         if 'functions' in self.config:
             raise DarqConfigError(
@@ -94,9 +101,14 @@ class Darq:
     ) -> t.Callable[..., t.Any]:
 
         @functools.wraps(function)
-        async def wrapper(*args: t.Any, **kwargs: t.Any) -> t.Any:
-            ctx, splitted_args = split_job_ctx_from_args(args)
-            result = await function(*splitted_args, **kwargs)
+        async def wrapper(ctx: JobCtx, *args: t.Any, **kwargs: t.Any) -> t.Any:
+            if self.on_job_prerun:
+                await self.on_job_prerun(ctx, function, args, kwargs)
+
+            result = await function(*args, **kwargs)
+
+            if self.on_job_postrun:
+                await self.on_job_postrun(ctx, function, args, kwargs, result)
             return result
 
         return wrapper
@@ -112,11 +124,11 @@ class Darq:
     ) -> t.Any:
 
         def _decorate(function: AnyCallable) -> AnyCallable:
-            function = self.wrap_job_coroutine(function)
             name = get_function_name(function)
+
             worker_func = arq.worker.func(
-                coroutine=function, name=name, keep_result=keep_result,
-                timeout=timeout, max_tries=max_tries,
+                coroutine=self.wrap_job_coroutine(function), name=name,
+                keep_result=keep_result, timeout=timeout, max_tries=max_tries,
             )
             self.registry.add(worker_func)
 

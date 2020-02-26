@@ -1,5 +1,8 @@
 ## Changelog
 
+### 0.2.0 (2020-02-26)
+* Add `on_job_prerun(ctx, function, args, kwargs)` and `on_job_postrun(ctx, function, args, kwargs, result)` callbacks.
+
 ### 0.1.0 (2020-02-26)
 * **Breaking change**: Jobs no longer explicitly get `JobCtx` as the first argument, as in 99.9% cases it doesn't need it. In future release will be possible to optionally pass JobCtx in some way.
 * **Breaking change**: All cron jobs should be wrapped in `@task` decorator
