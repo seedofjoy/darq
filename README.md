@@ -19,13 +19,16 @@ darq = darq.Darq({'redis_settings': darq.RedisSettings(host='redis')})
 
 
 @darq.task
-async def add_to_42(ctx, a: int) -> int:
+async def add_to_42(a: int) -> int:
     return 42 + a
 
 
 async def main():
     # Before adding tasks to queue we should connect darq instance to redis
     await darq.connect()
+    
+    # Direct call job as function:
+    result = await add_to_42(5)  # result == 47
 
     # Celery-like add task to queue:
     await add_to_42.delay(a=5)
