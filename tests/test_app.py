@@ -6,8 +6,10 @@ import arq
 import pytest
 from arq.connections import ArqRedis
 
+from darq import cron
 from darq import Darq
 from darq.app import DarqConnectionError
+from darq.app import DarqException
 from . import redis_settings
 
 darq_config = {'redis_settings': redis_settings, 'burst': True}
@@ -32,7 +34,7 @@ def parse_log(records):
 
 
 def assert_worker_job_finished(
-        *, records, job_id, function_name, result, args, kwargs,
+        *, records, job_id, function_name, result, args=None, kwargs=None,
 ):
     call_args = []
     if args:
@@ -42,9 +44,10 @@ def assert_worker_job_finished(
             f'{name}={param}' for name, param in kwargs.items()
         ]))
     call_str = ', '.join(call_args)
+    job_id_str = f'{job_id}:' if job_id else ''
     assert (
-        f'X.XXs → {job_id}:{function_name}({call_str})\n'
-        f'X.XXs ← {job_id}:{function_name} ● {result}'
+        f'X.XXs → {job_id_str}{function_name}({call_str})\n'
+        f'X.XXs ← {job_id_str}{function_name} ● {result}'
     ) in parse_log(records)
 
 
@@ -52,6 +55,10 @@ async def foobar(a: int, enqueue_self=False) -> int:
     if enqueue_self:
         await foobar.delay(a + 1, _job_id='enqueue_self')
     return 42 + a
+
+
+async def cron_func():
+    return 'ok'
 
 
 @pytest.mark.asyncio
@@ -214,3 +221,51 @@ async def test_on_job_callbacks(args, kwargs, result, caplog, worker_factory):
     assert call_args[2] == args
     assert call_args[3] == kwargs
     assert call_args[4] == result
+
+
+@pytest.mark.asyncio
+async def test_add_cron_jobs(caplog, worker_factory):
+    caplog.set_level(logging.INFO)
+    darq = Darq(darq_config)
+
+    with pytest.raises(DarqException):
+        darq.add_cron_jobs(cron(cron_func))
+
+    cron_func_task = darq.task(cron_func)
+    darq.add_cron_jobs(
+        cron('tests.test_app.cron_func', run_at_startup=True),
+        cron(cron_func, run_at_startup=True),
+        cron(cron_func, run_at_startup=True),  # duplicate doesn't start
+        cron(cron_func, name='custom_name', run_at_startup=True),
+        cron(cron_func_task, name='custom_name2', run_at_startup=True),
+    )
+
+    worker = await worker_factory(darq)
+    assert worker.jobs_complete == 0
+    await worker.main()
+    assert worker.jobs_complete == 4
+
+    assert_worker_job_finished(
+        records=caplog.records,
+        job_id='cron',
+        function_name='tests.test_app.cron_func',
+        result="'ok'",
+    )
+    assert_worker_job_finished(
+        records=caplog.records,
+        job_id='cron',
+        function_name='cron_func',
+        result="'ok'",
+    )
+    assert_worker_job_finished(
+        records=caplog.records,
+        job_id='',
+        function_name='custom_name',
+        result="'ok'",
+    )
+    assert_worker_job_finished(
+        records=caplog.records,
+        job_id='',
+        function_name='custom_name2',
+        result="'ok'",
+    )

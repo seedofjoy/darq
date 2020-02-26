@@ -83,9 +83,10 @@ class Darq:
             importlib.import_module(pkg)
 
     def add_cron_jobs(self, *jobs: CronJob) -> None:
-        registered_coroutines = set(
-            arq_func.coroutine for arq_func in self.registry.values()
-        )
+        registered_coroutines = {
+            arq_func.coroutine.__wrapped__: arq_func.coroutine  # type: ignore
+            for arq_func in self.registry.values()
+        }
         for job in jobs:
             if not isinstance(job, CronJob):
                 raise DarqException(f'{job!r} must be instance of CronJob')
@@ -94,6 +95,8 @@ class Darq:
                     f'{job.coroutine!r} is not registered. '
                     'Please, wrap it with @task decorator.',
                 )
+            wrapped_coroutine = registered_coroutines.get(job.coroutine)
+            job.coroutine = wrapped_coroutine  # type: ignore
             self.config['cron_jobs'].append(job)
 
     def wrap_job_coroutine(

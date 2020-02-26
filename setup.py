@@ -14,7 +14,7 @@ long_description = '\n\n'.join((
 
 setuptools.setup(
     name='darq',
-    version='0.2.0',
+    version='0.2.1',
     author='Igor Mozharovsky',
     author_email='igor.mozharovsky@gmail.com',
     description='A small wrapper around arq',

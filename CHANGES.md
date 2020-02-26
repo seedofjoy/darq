@@ -1,5 +1,8 @@
 ## Changelog
 
+### 0.2.1 (2020-02-26)
+* Fix `add_cron_jobs` method. Tests added.
+
 ### 0.2.0 (2020-02-26)
 * Add `on_job_prerun(ctx, function, args, kwargs)` and `on_job_postrun(ctx, function, args, kwargs, result)` callbacks.
 
