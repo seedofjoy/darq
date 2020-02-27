@@ -191,6 +191,7 @@ async def test_on_job_callbacks(args, kwargs, result, caplog, worker_factory):
 
     await darq.connect()
     job_id = 'testing'
+    function_name = 'tests.test_app.foobar'
     await foobar_task.delay(*args, _job_id=job_id, **kwargs)
 
     worker = await worker_factory(darq)
@@ -199,7 +200,7 @@ async def test_on_job_callbacks(args, kwargs, result, caplog, worker_factory):
     assert_worker_job_finished(
         records=caplog.records,
         job_id=job_id,
-        function_name='tests.test_app.foobar',
+        function_name=function_name,
         result=result,
         args=args,
         kwargs=kwargs,
@@ -207,17 +208,21 @@ async def test_on_job_callbacks(args, kwargs, result, caplog, worker_factory):
 
     on_job_prerun.assert_called_once()
     call_args = on_job_prerun.call_args[0]
-    assert len(call_args) == 4  # ctx, function, args, kwargs
+    assert len(call_args) == 4  # ctx, arq_function, args, kwargs
     assert_is_ctx(call_args[0])
-    assert call_args[1] == foobar_task
+    assert isinstance(call_args[1], arq.worker.Function)
+    assert call_args[1].name == function_name
+    assert call_args[1].coroutine.__wrapped__ == foobar_task
     assert call_args[2] == args
     assert call_args[3] == kwargs
 
     on_job_postrun.assert_called_once()
     call_args = on_job_postrun.call_args[0]
-    assert len(call_args) == 5  # ctx, function, args, kwargs, result
+    assert len(call_args) == 5  # ctx, arq_function, args, kwargs, result
     assert_is_ctx(call_args[0])
-    assert call_args[1] == foobar_task
+    assert isinstance(call_args[1], arq.worker.Function)
+    assert call_args[1].name == function_name
+    assert call_args[1].coroutine.__wrapped__ == foobar_task
     assert call_args[2] == args
     assert call_args[3] == kwargs
     assert call_args[4] == result

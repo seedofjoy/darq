@@ -1,5 +1,8 @@
 ## Changelog
 
+### 0.3.0 (2020-02-27)
+* **Breaking change**: `on_job_prerun` and `on_job_postrun` now accepts `arq.worker.Function` instead of the original function (it can still be accessed at `arq_function.coroutine`)
+
 ### 0.2.1 (2020-02-26)
 * Fix `add_cron_jobs` method. Tests added.
 
