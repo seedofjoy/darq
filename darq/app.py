@@ -83,20 +83,17 @@ class Darq:
             importlib.import_module(pkg)
 
     def add_cron_jobs(self, *jobs: CronJob) -> None:
-        registered_coroutines = {
-            arq_func.coroutine.__wrapped__: arq_func.coroutine  # type: ignore
-            for arq_func in self.registry.values()
-        }
         for job in jobs:
             if not isinstance(job, CronJob):
                 raise DarqException(f'{job!r} must be instance of CronJob')
-            if job.coroutine not in registered_coroutines:
+            if job.coroutine not in self.registry.by_original_coro:
                 raise DarqException(
                     f'{job.coroutine!r} is not registered. '
                     'Please, wrap it with @task decorator.',
                 )
-            wrapped_coroutine = registered_coroutines.get(job.coroutine)
-            job.coroutine = wrapped_coroutine  # type: ignore
+            # Replace original coroutine with wrapped by ``wrap_job_coroutine``
+            arq_function = self.registry.by_original_coro[job.coroutine]
+            job.coroutine = arq_function.coroutine  # type: ignore
             self.config['cron_jobs'].append(job)
 
     def wrap_job_coroutine(
@@ -105,13 +102,16 @@ class Darq:
 
         @functools.wraps(function)
         async def wrapper(ctx: JobCtx, *args: t.Any, **kwargs: t.Any) -> t.Any:
+            arq_function = self.registry.by_original_coro[function]
             if self.on_job_prerun:
-                await self.on_job_prerun(ctx, function, args, kwargs)
+                await self.on_job_prerun(ctx, arq_function, args, kwargs)
 
             result = await function(*args, **kwargs)
 
             if self.on_job_postrun:
-                await self.on_job_postrun(ctx, function, args, kwargs, result)
+                await self.on_job_postrun(
+                    ctx, arq_function, args, kwargs, result,
+                )
             return result
 
         return wrapper
