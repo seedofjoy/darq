@@ -1,18 +1,17 @@
 import asyncio
 import logging
-import signal
 import typing as t
 
 from arq.worker import async_check_health
+from arq.worker import Function  # noqa: F401  need for reimport
 from arq.worker import get_kwargs
 from arq.worker import Worker as ArqWorker
 
 from .app import Darq
 from .types import JobCtx
+from .utils import poll
 
 logger = logging.getLogger('arq.worker')
-
-SIGTERM_TIMEOUT = 30
 
 
 class Worker(ArqWorker):
@@ -23,6 +22,10 @@ class Worker(ArqWorker):
     ) -> None:
         self.darq_app = darq_app
         settings = self.get_settings(queue)
+
+        self.warm_shutdown_timeout = 30
+        self.warm_shutdown_task: t.Optional[asyncio.Task[None]] = None
+
         super().__init__(*args, **{**settings, **kwargs})
 
     def get_settings(self, queue: str) -> t.Dict[str, t.Any]:
@@ -52,29 +55,36 @@ class Worker(ArqWorker):
     def has_running_tasks(self) -> bool:
         return any(not task.done() for task in self.tasks)
 
+    async def run_jobs(self, job_ids: t.Sequence[str]) -> None:
+        if self.warm_shutdown_task:
+            return
+        await super().run_jobs(job_ids)  # type: ignore
+
+    async def run_cron(self) -> None:
+        if self.warm_shutdown_task:
+            return
+        await super().run_cron()  # type: ignore
+
     def handle_sig(self, signum: int) -> None:
-        if signum == signal.SIGTERM and self.has_running_tasks():
-            self.main_task and self.main_task.cancel()
+        if self.warm_shutdown_task:
+            self.warm_shutdown_task.cancel()
+            super().handle_sig(signum)  # type: ignore
+        else:
+            self.warm_shutdown_task = self.loop.create_task(
+                self.warm_shutdown(signum),
+            )
+
+    async def warm_shutdown(self, signum: int) -> None:
+        if self.has_running_tasks():
             awaiting_task_count = sum(not task.done() for task in self.tasks)
             logger.info(
-                'Awaiting for %d jobs with timeout %d',
-                awaiting_task_count, SIGTERM_TIMEOUT,
+                'Warm shutdown. Awaiting for %d jobs with %d seconds timeout.',
+                awaiting_task_count, self.warm_shutdown_timeout,
             )
-            asyncio.ensure_future(
-                self.handle_sig_delayed(signum, timeout=SIGTERM_TIMEOUT),
-            )
-        else:
-            super().handle_sig(signum)  # type: ignore
+            async for _ in poll(step=0.1, timeout=self.warm_shutdown_timeout):
+                if not self.has_running_tasks():
+                    break
 
-    async def handle_sig_delayed(
-            self, signum: int, *, timeout: t.Union[int, float],
-    ) -> None:
-        elapsed = 0
-        while elapsed <= timeout:
-            if not self.has_running_tasks():
-                break
-            await asyncio.sleep(1)
-            elapsed += 1
         super().handle_sig(signum)  # type: ignore
 
 

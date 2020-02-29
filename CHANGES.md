@@ -1,5 +1,8 @@
 ## Changelog
 
+### 0.3.1 (2020-03-02)
+* Rewrite warm shutdown: now during warm shutdown cron is disabled, on second signal the warm shutdown will be canceled
+
 ### 0.3.0 (2020-02-27)
 * **Breaking change**: `on_job_prerun` and `on_job_postrun` now accepts `arq.worker.Function` instead of the original function (it can still be accessed at `arq_function.coroutine`)
 
