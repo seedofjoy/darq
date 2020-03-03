@@ -10,6 +10,7 @@ else:
     from typing_extensions import TypedDict
 
 AnyCallable = t.Callable[..., t.Any]
+AnyTimedelta = t.Union[int, float, datetime.timedelta]
 
 
 class JobCtx(TypedDict):
