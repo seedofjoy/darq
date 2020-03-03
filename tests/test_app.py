@@ -1,10 +1,12 @@
+import datetime
 import logging
 import re
-from unittest.mock import MagicMock
 
 import arq
 import pytest
 from arq.connections import ArqRedis
+from asynctest import CoroutineMock
+from asynctest import patch
 
 from darq import cron
 from darq import Darq
@@ -13,11 +15,6 @@ from darq.app import DarqException
 from . import redis_settings
 
 darq_config = {'redis_settings': redis_settings, 'burst': True}
-
-
-class AsyncMock(MagicMock):
-    async def __call__(self, *args, **kwargs):
-        return super().__call__(*args, **kwargs)
 
 
 def assert_is_ctx(ctx):
@@ -175,11 +172,8 @@ async def test_task_self_enqueue(caplog, worker_factory):
 async def test_on_job_callbacks(args, kwargs, result, caplog, worker_factory):
     caplog.set_level(logging.INFO)
 
-    on_job_prerun = AsyncMock()
-    on_job_prerun.__bool__ = lambda self: True
-
-    on_job_postrun = AsyncMock()
-    on_job_postrun.__bool__ = lambda self: True
+    on_job_prerun = CoroutineMock()
+    on_job_postrun = CoroutineMock()
 
     darq = Darq(
         darq_config,
@@ -274,3 +268,62 @@ async def test_add_cron_jobs(caplog, worker_factory):
         function_name='custom_name2',
         result="'ok'",
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    'darq_kwargs, task_kwargs, delay_args, delay_kwargs, expected_kwargs', [
+        (
+            {}, {}, [], {},
+            {'_expires': datetime.timedelta(days=1)},
+        ),
+        (
+            {'default_job_expires': 3600}, {}, [], {},
+            {'_expires': 3600},
+        ),
+        (
+            {'default_job_expires': 3600}, {}, [], {'_expires': 32},
+            {'_expires': 32},
+        ),
+        (
+            {}, {'expires': 12}, [], {},
+            {'_expires': 12},
+        ),
+        (
+            {}, {'expires': 12}, [], {'_expires': 200},
+            {'_expires': 200},
+        ),
+    ],
+)
+@patch('arq.connections.ArqRedis.enqueue_job')
+async def test_enqueue_job_params(
+        enqueue_job_patched,
+        darq_kwargs, task_kwargs, delay_args, delay_kwargs, expected_kwargs,
+):
+    enqueue_job_patched.reset_mock()
+
+    darq = Darq(darq_config, **darq_kwargs)
+    foobar_task = darq.task(foobar, **task_kwargs)
+    await darq.connect()
+    await foobar_task.delay(*delay_args, **delay_kwargs)
+
+    enqueue_job_patched.assert_called_once_with(
+        'tests.test_app.foobar',
+        **expected_kwargs,
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('task_kwargs,delay_kwargs,expected', [
+    ({}, {}, 'arq:queue'),
+    ({'queue': 'my_q'}, {}, 'my_q'),
+    ({}, {'_queue_name': 'my_queue'}, 'my_queue'),
+    ({'queue': 'my_q'}, {'_queue_name': 'new_q'}, 'new_q'),
+])
+async def test_task_queue(task_kwargs, delay_kwargs, expected):
+    darq = Darq(darq_config)
+    foobar_task = darq.task(foobar, **task_kwargs)
+    await darq.connect()
+
+    job = await foobar_task.delay(**delay_kwargs)
+    assert job._queue_name == expected

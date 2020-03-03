@@ -1,5 +1,6 @@
 pytest
 pytest-asyncio
+asynctest
 mypy
 flake8
 flake8-quotes

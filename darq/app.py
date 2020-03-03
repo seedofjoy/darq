@@ -10,8 +10,11 @@ from arq.jobs import Job
 
 from .registry import Registry
 from .types import AnyCallable
+from .types import AnyTimedelta
 from .types import JobCtx
 from .utils import get_function_name
+
+TD_1_DAY = datetime.timedelta(days=1)
 
 
 class DarqException(Exception):
@@ -31,10 +34,12 @@ class Darq:
     def __init__(
             self,
             config: t.Dict[str, t.Any],
+            default_job_expires: AnyTimedelta = TD_1_DAY,
             on_job_prerun: t.Optional[t.Callable[..., t.Any]] = None,
             on_job_postrun: t.Optional[t.Callable[..., t.Any]] = None,
     ) -> None:
         self.registry = Registry()
+        self.default_job_expires = default_job_expires
         self.on_job_prerun = on_job_prerun
         self.on_job_postrun = on_job_postrun
         self.config = config.copy()
@@ -120,10 +125,11 @@ class Darq:
             self,
             func: t.Optional[AnyCallable] = None,
             *,
-            keep_result: t.Union[int, float, datetime.timedelta, None] = None,
-            timeout: t.Union[int, float, datetime.timedelta, None] = None,
+            keep_result: t.Optional[AnyTimedelta] = None,
+            timeout: t.Optional[AnyTimedelta] = None,
             max_tries: t.Optional[int] = None,
             queue: t.Optional[str] = None,
+            expires: t.Optional[AnyTimedelta] = None,
     ) -> t.Any:
 
         def _decorate(function: AnyCallable) -> AnyCallable:
@@ -136,8 +142,11 @@ class Darq:
             self.registry.add(worker_func)
 
             async def delay(*args: t.Any, **kwargs: t.Any) -> t.Optional[Job]:
-                if queue:
+                if queue and '_queue_name' not in kwargs:
                     kwargs['_queue_name'] = queue
+                if '_expires' not in kwargs:
+                    kwargs['_expires'] = expires or self.default_job_expires
+
                 if not self.connected or not self.redis:
                     raise DarqConnectionError(
                         'Darq app is not connected. Please, make '

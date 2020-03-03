@@ -1,5 +1,9 @@
 ## Changelog
 
+### 0.4.0 (2020-03-03)
+* Add `default_job_expires` param to Darq (if the job still hasn't started after this duration, do not run it). Default - 1 day
+* Add `expires` param to `@task` (if set - overwrites `default_job_expires`)
+
 ### 0.3.1 (2020-03-02)
 * Rewrite warm shutdown: now during warm shutdown cron is disabled, on second signal the warm shutdown will be canceled
 
