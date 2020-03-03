@@ -19,3 +19,4 @@ class JobCtx(TypedDict):
     job_try: int
     enqueue_time: datetime.datetime
     score: int
+    metadata: t.Dict[str, t.Any]

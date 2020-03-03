@@ -21,6 +21,7 @@ def assert_is_ctx(ctx):
     assert isinstance(ctx, dict)
     assert isinstance(ctx.get('redis'), ArqRedis)
     assert isinstance(ctx.get('job_id'), str)
+    assert isinstance(ctx.get('metadata'), dict)
 
 
 def parse_log(records):
@@ -165,28 +166,48 @@ async def test_task_self_enqueue(caplog, worker_factory):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('args,kwargs,result', [
+@pytest.mark.parametrize('func_args,func_kwargs,result', [
     ((1,), {}, 43),
     ((), {'a': 2}, 44),
 ])
-async def test_on_job_callbacks(args, kwargs, result, caplog, worker_factory):
+async def test_on_job_callbacks(
+        func_args, func_kwargs, result, caplog, worker_factory,
+):
     caplog.set_level(logging.INFO)
+
+    expected_metadata = {'test_var': 'ok'}
+
+    async def prepublish_side_effect(metadata, arq_function, args, kwargs):
+        metadata.update(expected_metadata)
+        assert isinstance(arq_function, arq.worker.Function)
+        assert args == func_args
+        assert kwargs == {
+            '_expires': datetime.timedelta(days=1),
+            '_job_id': 'testing',
+            **func_kwargs,
+        }
 
     on_job_prerun = CoroutineMock()
     on_job_postrun = CoroutineMock()
+    on_job_prepublish = CoroutineMock(side_effect=prepublish_side_effect)
 
     darq = Darq(
         darq_config,
         on_job_prerun=on_job_prerun,
         on_job_postrun=on_job_postrun,
+        on_job_prepublish=on_job_prepublish,
     )
 
     foobar_task = darq.task(foobar)
 
+    on_job_prepublish.assert_not_called()
+
     await darq.connect()
     job_id = 'testing'
     function_name = 'tests.test_app.foobar'
-    await foobar_task.delay(*args, _job_id=job_id, **kwargs)
+    await foobar_task.delay(*func_args, _job_id=job_id, **func_kwargs)
+
+    on_job_prepublish.assert_called_once()
 
     worker = await worker_factory(darq)
     await worker.main()
@@ -196,29 +217,33 @@ async def test_on_job_callbacks(args, kwargs, result, caplog, worker_factory):
         job_id=job_id,
         function_name=function_name,
         result=result,
-        args=args,
-        kwargs=kwargs,
+        args=func_args,
+        kwargs={'__metadata__': expected_metadata, **func_kwargs},
     )
 
     on_job_prerun.assert_called_once()
     call_args = on_job_prerun.call_args[0]
     assert len(call_args) == 4  # ctx, arq_function, args, kwargs
-    assert_is_ctx(call_args[0])
+    ctx = call_args[0]
+    assert_is_ctx(ctx)
+    assert ctx['metadata'] == expected_metadata
     assert isinstance(call_args[1], arq.worker.Function)
     assert call_args[1].name == function_name
     assert call_args[1].coroutine.__wrapped__ == foobar_task
-    assert call_args[2] == args
-    assert call_args[3] == kwargs
+    assert call_args[2] == func_args
+    assert call_args[3] == func_kwargs
 
     on_job_postrun.assert_called_once()
     call_args = on_job_postrun.call_args[0]
     assert len(call_args) == 5  # ctx, arq_function, args, kwargs, result
-    assert_is_ctx(call_args[0])
+    ctx = call_args[0]
+    assert_is_ctx(ctx)
+    assert ctx['metadata'] == expected_metadata
     assert isinstance(call_args[1], arq.worker.Function)
     assert call_args[1].name == function_name
     assert call_args[1].coroutine.__wrapped__ == foobar_task
-    assert call_args[2] == args
-    assert call_args[3] == kwargs
+    assert call_args[2] == func_args
+    assert call_args[3] == func_kwargs
     assert call_args[4] == result
 
 

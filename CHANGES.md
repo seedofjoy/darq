@@ -1,5 +1,8 @@
 ## Changelog
 
+### 0.5.0 (2020-03-03)
+* Add `on_job_prepublish(metadata, arq_function, args, kwargs)` callback. `metadata` is mutable dict, which will be available at `ctx['metadata']`.
+
 ### 0.4.0 (2020-03-03)
 * Add `default_job_expires` param to Darq (if the job still hasn't started after this duration, do not run it). Default - 1 day
 * Add `expires` param to `@task` (if set - overwrites `default_job_expires`)
