@@ -37,11 +37,13 @@ class Darq:
             default_job_expires: AnyTimedelta = TD_1_DAY,
             on_job_prerun: t.Optional[t.Callable[..., t.Any]] = None,
             on_job_postrun: t.Optional[t.Callable[..., t.Any]] = None,
+            on_job_prepublish: t.Optional[t.Callable[..., t.Any]] = None,
     ) -> None:
         self.registry = Registry()
         self.default_job_expires = default_job_expires
         self.on_job_prerun = on_job_prerun
         self.on_job_postrun = on_job_postrun
+        self.on_job_prepublish = on_job_prepublish
         self.config = config.copy()
         if 'functions' in self.config:
             raise DarqConfigError(
@@ -108,6 +110,7 @@ class Darq:
         @functools.wraps(function)
         async def wrapper(ctx: JobCtx, *args: t.Any, **kwargs: t.Any) -> t.Any:
             arq_function = self.registry.by_original_coro[function]
+            ctx['metadata'] = kwargs.pop('__metadata__', {})
             if self.on_job_prerun:
                 await self.on_job_prerun(ctx, arq_function, args, kwargs)
 
@@ -135,11 +138,11 @@ class Darq:
         def _decorate(function: AnyCallable) -> AnyCallable:
             name = get_function_name(function)
 
-            worker_func = arq.worker.func(
+            arq_function = arq.worker.func(
                 coroutine=self.wrap_job_coroutine(function), name=name,
                 keep_result=keep_result, timeout=timeout, max_tries=max_tries,
             )
-            self.registry.add(worker_func)
+            self.registry.add(arq_function)
 
             async def delay(*args: t.Any, **kwargs: t.Any) -> t.Optional[Job]:
                 if queue and '_queue_name' not in kwargs:
@@ -153,6 +156,12 @@ class Darq:
                         '"await <darq_instance>.connect()" before calling '
                         'this function',
                     )
+                metadata: t.Dict[str, t.Any] = {}
+                self.on_job_prepublish and await self.on_job_prepublish(
+                    metadata, arq_function, args, kwargs,
+                )
+                if metadata:
+                    kwargs['__metadata__'] = metadata
                 return await self.redis.enqueue_job(name, *args, **kwargs)
 
             function.delay = delay  # type: ignore
