@@ -14,8 +14,6 @@ from darq.app import DarqConnectionError
 from darq.app import DarqException
 from . import redis_settings
 
-darq_config = {'redis_settings': redis_settings, 'burst': True}
-
 
 def assert_is_ctx(ctx):
     assert isinstance(ctx, dict)
@@ -60,41 +58,33 @@ async def cron_func():
 
 
 @pytest.mark.asyncio
-async def test_darq_connect_disconnect():
-    darq = Darq(darq_config)
-    assert not darq.connected
-    assert darq.redis is None
+async def test_darq_connect_disconnect(darq):
+    assert darq.redis_pool is None
 
     await darq.connect()
-    assert darq.connected
-    assert isinstance(darq.redis, ArqRedis)
+    assert isinstance(darq.redis_pool, ArqRedis)
 
     await darq.disconnect()
-    assert not darq.connected
-    assert darq.redis and darq.redis.connection.closed
+    assert darq.redis_pool and darq.redis_pool.connection.closed
 
 
 @pytest.mark.asyncio
-async def test_darq_not_connected():
-    darq = Darq(darq_config)
+async def test_darq_not_connected(darq):
     foobar_task = darq.task(foobar)
     with pytest.raises(DarqConnectionError):
         await foobar_task.delay()
 
 
 @pytest.mark.asyncio
-async def test_job_works_like_a_function():
-    darq = Darq(darq_config)
+async def test_job_works_like_a_function(darq):
     foobar_task = darq.task(foobar)
     assert await foobar_task(2) == 44
     assert await foobar_task(a=5) == 47
 
 
 @pytest.mark.asyncio
-async def test_task_decorator(caplog, worker_factory):
+async def test_task_decorator(darq, caplog, worker_factory):
     caplog.set_level(logging.INFO)
-
-    darq = Darq(darq_config)
 
     foobar_task = darq.task(foobar)
 
@@ -118,9 +108,7 @@ async def test_task_decorator(caplog, worker_factory):
 
 
 @pytest.mark.asyncio
-async def test_task_parametrized():
-    darq = Darq(darq_config)
-
+async def test_task_parametrized(darq):
     assert len(darq.registry) == 0
 
     timeout = 4
@@ -143,10 +131,8 @@ async def test_task_parametrized():
 
 
 @pytest.mark.asyncio
-async def test_task_self_enqueue(caplog, worker_factory):
+async def test_task_self_enqueue(darq, caplog, worker_factory):
     caplog.set_level(logging.INFO)
-
-    darq = Darq(darq_config)
 
     foobar_task = darq.task(foobar)
 
@@ -192,7 +178,8 @@ async def test_on_job_callbacks(
     on_job_prepublish = CoroutineMock(side_effect=prepublish_side_effect)
 
     darq = Darq(
-        darq_config,
+        redis_settings=redis_settings,
+        burst=True,
         on_job_prerun=on_job_prerun,
         on_job_postrun=on_job_postrun,
         on_job_prepublish=on_job_prepublish,
@@ -248,9 +235,8 @@ async def test_on_job_callbacks(
 
 
 @pytest.mark.asyncio
-async def test_add_cron_jobs(caplog, worker_factory):
+async def test_add_cron_jobs(darq, caplog, worker_factory):
     caplog.set_level(logging.INFO)
-    darq = Darq(darq_config)
 
     with pytest.raises(DarqException):
         darq.add_cron_jobs(cron(cron_func))
@@ -327,7 +313,7 @@ async def test_enqueue_job_params(
 ):
     enqueue_job_patched.reset_mock()
 
-    darq = Darq(darq_config, **darq_kwargs)
+    darq = Darq(redis_settings=redis_settings, **darq_kwargs)
     foobar_task = darq.task(foobar, **task_kwargs)
     await darq.connect()
     await foobar_task.delay(*delay_args, **delay_kwargs)
@@ -345,8 +331,7 @@ async def test_enqueue_job_params(
     ({}, {'_queue_name': 'my_queue'}, 'my_queue'),
     ({'queue': 'my_q'}, {'_queue_name': 'new_q'}, 'new_q'),
 ])
-async def test_task_queue(task_kwargs, delay_kwargs, expected):
-    darq = Darq(darq_config)
+async def test_task_queue(task_kwargs, delay_kwargs, expected, darq):
     foobar_task = darq.task(foobar, **task_kwargs)
     await darq.connect()
 

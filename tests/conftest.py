@@ -2,6 +2,7 @@ import pytest
 from aioredis import create_redis_pool
 from arq.connections import ArqRedis
 
+from darq import Darq
 from darq.worker import create_worker
 from . import redis_settings
 
@@ -31,3 +32,8 @@ async def worker_factory(arq_redis):
 
     if worker_:
         await worker_.close()
+
+
+@pytest.fixture
+async def darq():
+    return Darq(redis_settings=redis_settings, burst=True)

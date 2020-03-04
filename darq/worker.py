@@ -4,10 +4,10 @@ import typing as t
 
 from arq.worker import async_check_health
 from arq.worker import Function  # noqa: F401  need for reimport
-from arq.worker import get_kwargs
 from arq.worker import Worker as ArqWorker
 
 from .app import Darq
+from .types import DataDict
 from .types import JobCtx
 from .utils import poll
 
@@ -16,41 +16,47 @@ logger = logging.getLogger('arq.worker')
 
 class Worker(ArqWorker):
 
-    def __init__(
-            self, darq_app: Darq, queue: str,
-            *args: t.Any, **kwargs: t.Any,
-    ) -> None:
-        self.darq_app = darq_app
-        settings = self.get_settings(queue)
-
+    def __init__(self, app: Darq, queue: str) -> None:
+        self.app = app
         self.warm_shutdown_timeout = 30
         self.warm_shutdown_task: t.Optional[asyncio.Task[None]] = None
 
-        super().__init__(*args, **{**settings, **kwargs})
-
-    def get_settings(self, queue: str) -> t.Dict[str, t.Any]:
-        settings = {**self.darq_app.config}
-        settings['functions'] = self.darq_app.registry.get_functions()
-        if queue:
-            settings['queue_name'] = queue
-
-        on_startup = settings.get('on_startup')
-
         async def wrapped_on_startup(ctx: JobCtx) -> None:
-            await self.darq_app.connect(ctx['redis'])
-            if on_startup:
-                await on_startup(ctx)
-
-        on_shutdown = settings.get('on_shutdown')
+            await self.app.connect(ctx['redis'])
+            self.app.on_startup and await self.app.on_startup(ctx)
 
         async def wrapped_on_shutdown(ctx: JobCtx) -> None:
-            if on_shutdown:
-                await on_shutdown(ctx)
-            await self.darq_app.disconnect()
+            self.app.on_shutdown and await self.app.on_shutdown(ctx)
+            await self.app.disconnect()
 
-        settings['on_startup'] = wrapped_on_startup
-        settings['on_shutdown'] = wrapped_on_shutdown
-        return get_kwargs(settings)  # type: ignore
+        extra_kwargs: DataDict = {
+            'on_startup': wrapped_on_startup,
+            'on_shutdown': wrapped_on_shutdown,
+        }
+        if queue:
+            extra_kwargs['queue_name'] = queue
+
+        super().__init__(
+            functions=app.registry.get_functions(),
+            redis_settings=app.redis_settings,
+            redis_pool=app.redis_pool,
+            burst=app.burst,
+            max_jobs=app.max_jobs,
+            job_timeout=app.job_timeout,
+            keep_result=app.keep_result,
+            poll_delay=app.poll_delay,
+            queue_read_limit=app.queue_read_limit,
+            max_tries=app.max_tries,
+            health_check_interval=app.health_check_interval,
+            health_check_key=app.health_check_key,
+            ctx=app.ctx,
+            retry_jobs=app.retry_jobs,
+            max_burst_jobs=app.max_burst_jobs,
+            job_serializer=app.job_serializer,
+            job_deserializer=app.job_deserializer,
+            cron_jobs=app.cron_jobs,
+            **extra_kwargs,
+        )
 
     def has_running_tasks(self) -> bool:
         return any(not task.done() for task in self.tasks)
@@ -88,26 +94,22 @@ class Worker(ArqWorker):
         super().handle_sig(signum)  # type: ignore
 
 
-def create_worker(darq: Darq, queue: str, **kwargs: t.Any) -> Worker:
-    return Worker(darq, queue, **kwargs)
+def create_worker(darq: Darq, queue: str) -> Worker:
+    return Worker(darq, queue)
 
 
-def run_worker(darq: Darq, queue: str, **kwargs: t.Any) -> Worker:
-    worker = create_worker(darq, queue, **kwargs)
+def run_worker(darq: Darq, queue: str) -> Worker:
+    worker = create_worker(darq, queue)
     worker.run()
     return worker
 
 
-def check_health(darq: Darq) -> int:
+def check_health(darq: Darq, queue: str) -> int:
     """
     Run a health check on the worker and return the appropriate exit code.
     :return: 0 if successful, 1 if not
     """
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(
-        async_check_health(
-            darq.config.get('redis_settings'),
-            darq.config.get('health_check_key'),
-            darq.config.get('queue_name'),
-        ),
+        async_check_health(darq.redis_settings, darq.health_check_key, queue),
     )

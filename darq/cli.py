@@ -37,7 +37,7 @@ def cli(*, darq_app: str, check: bool, verbose: bool, queue: str) -> None:
     logging.config.dictConfig(default_log_config(verbose))
 
     if check:
-        exit(check_health(darq))
+        exit(check_health(darq, queue))
     else:
         run_worker(darq, queue)
 

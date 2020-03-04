@@ -5,13 +5,21 @@ import typing as t
 
 import arq
 from arq.connections import ArqRedis
+from arq.connections import RedisSettings
 from arq.cron import CronJob
+from arq.jobs import Deserializer
 from arq.jobs import Job
+from arq.jobs import Serializer
+from arq.utils import SecondsTimedelta
 
 from .registry import Registry
 from .types import AnyCallable
 from .types import AnyTimedelta
+from .types import DataDict
 from .types import JobCtx
+from .types import OnJobPostrunType
+from .types import OnJobPrepublishType
+from .types import OnJobPrerunType
 from .utils import get_function_name
 
 TD_1_DAY = datetime.timedelta(days=1)
@@ -33,57 +41,69 @@ class Darq:
 
     def __init__(
             self,
-            config: t.Dict[str, t.Any],
+            redis_settings: t.Optional[RedisSettings] = None,
+            redis_pool: t.Optional[ArqRedis] = None,
+            burst: bool = False,
+            on_startup: t.Callable[[JobCtx], t.Awaitable[None]] = None,
+            on_shutdown: t.Callable[[JobCtx], t.Awaitable[None]] = None,
+            max_jobs: int = 10,
+            job_timeout: SecondsTimedelta = 300,
+            keep_result: SecondsTimedelta = 3600,
+            poll_delay: SecondsTimedelta = 0.5,
+            queue_read_limit: t.Optional[int] = None,
+            max_tries: int = 5,
+            health_check_interval: SecondsTimedelta = 3600,
+            health_check_key: t.Optional[str] = None,
+            ctx: t.Optional[DataDict] = None,
+            retry_jobs: bool = True,
+            max_burst_jobs: int = -1,
+            job_serializer: t.Optional[Serializer] = None,
+            job_deserializer: t.Optional[Deserializer] = None,
             default_job_expires: AnyTimedelta = TD_1_DAY,
-            on_job_prerun: t.Optional[t.Callable[..., t.Any]] = None,
-            on_job_postrun: t.Optional[t.Callable[..., t.Any]] = None,
-            on_job_prepublish: t.Optional[t.Callable[..., t.Any]] = None,
+            on_job_prerun: t.Optional[OnJobPrerunType] = None,
+            on_job_postrun: t.Optional[OnJobPostrunType] = None,
+            on_job_prepublish: t.Optional[OnJobPrepublishType] = None,
     ) -> None:
-        self.registry = Registry()
+        self.redis_settings = redis_settings
+        self.redis_pool = redis_pool
+        self.burst = burst
+        self.on_startup = on_startup
+        self.on_shutdown = on_shutdown
+        self.max_jobs = max_jobs
+        self.job_timeout = job_timeout
+        self.keep_result = keep_result
+        self.poll_delay = poll_delay
+        self.queue_read_limit = queue_read_limit
+        self.max_tries = max_tries
+        self.health_check_interval = health_check_interval
+        self.health_check_key = health_check_key
+        self.ctx = ctx
+        self.retry_jobs = retry_jobs
+        self.max_burst_jobs = max_burst_jobs
+        self.job_serializer = job_serializer
+        self.job_deserializer = job_deserializer
+
+        self.cron_jobs: t.List[CronJob] = []
         self.default_job_expires = default_job_expires
         self.on_job_prerun = on_job_prerun
         self.on_job_postrun = on_job_postrun
         self.on_job_prepublish = on_job_prepublish
-        self.config = config.copy()
-        if 'functions' in self.config:
-            raise DarqConfigError(
-                '"functions" should not exist in config, all functions will '
-                'be collected automatically. Just wrap your functions with '
-                '@darq.task decorator.',
-            )
-        if 'queue_name' in self.config:
-            raise DarqConfigError(
-                '"queue_name" should not exist in config. '
-                'To specify queue in worker - use "-Q" arg in cli.',
-            )
-
-        cron_jobs = self.config.pop('cron_jobs', [])
-        self.config['cron_jobs'] = []
-        self.add_cron_jobs(*cron_jobs)
-
-        self.redis: t.Optional[arq.ArqRedis] = None
-        if config.get('redis_pool'):
-            self.redis = config['redis_pool']
-        self.connected = bool(self.redis)
+        self.registry = Registry()
 
     async def connect(self, redis_pool: t.Optional[ArqRedis] = None) -> None:
-        if self.connected:
+        if self.redis_pool:
             return
 
-        if redis_pool:
-            self.redis = redis_pool
-        else:
-            self.redis = await arq.create_pool(self.config['redis_settings'])
-        self.connected = True
+        self.redis_pool = (
+            redis_pool or await arq.create_pool(self.redis_settings)
+        )
 
     async def disconnect(self) -> None:
-        if not self.connected:
+        if not self.redis_pool:
             return
 
-        if self.redis:
-            self.redis.close()
-            await self.redis.wait_closed()
-        self.connected = False
+        self.redis_pool.close()
+        await self.redis_pool.wait_closed()
 
     def autodiscover_tasks(self, packages: t.Sequence[str]) -> None:
         for pkg in packages:
@@ -101,7 +121,7 @@ class Darq:
             # Replace original coroutine with wrapped by ``wrap_job_coroutine``
             arq_function = self.registry.by_original_coro[job.coroutine]
             job.coroutine = arq_function.coroutine  # type: ignore
-            self.config['cron_jobs'].append(job)
+            self.cron_jobs.append(job)
 
     def wrap_job_coroutine(
             self, function: t.Callable[..., t.Any],
@@ -150,19 +170,19 @@ class Darq:
                 if '_expires' not in kwargs:
                     kwargs['_expires'] = expires or self.default_job_expires
 
-                if not self.connected or not self.redis:
+                if not self.redis_pool:
                     raise DarqConnectionError(
                         'Darq app is not connected. Please, make '
                         '"await <darq_instance>.connect()" before calling '
                         'this function',
                     )
-                metadata: t.Dict[str, t.Any] = {}
+                metadata: DataDict = {}
                 self.on_job_prepublish and await self.on_job_prepublish(
                     metadata, arq_function, args, kwargs,
                 )
                 if metadata:
                     kwargs['__metadata__'] = metadata
-                return await self.redis.enqueue_job(name, *args, **kwargs)
+                return await self.redis_pool.enqueue_job(name, *args, **kwargs)
 
             function.delay = delay  # type: ignore
             return function
