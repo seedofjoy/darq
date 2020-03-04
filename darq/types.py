@@ -11,6 +11,9 @@ else:
 
 AnyCallable = t.Callable[..., t.Any]
 AnyTimedelta = t.Union[int, float, datetime.timedelta]
+DataDict = t.Dict[str, t.Any]
+ArgsType = t.Sequence[t.Any]
+KwargsType = t.Mapping[str, t.Any]
 
 
 class JobCtx(TypedDict):
@@ -19,4 +22,18 @@ class JobCtx(TypedDict):
     job_try: int
     enqueue_time: datetime.datetime
     score: int
-    metadata: t.Dict[str, t.Any]
+    metadata: DataDict
+
+
+OnJobPrerunType = t.Callable[
+    [JobCtx, arq.worker.Function, ArgsType, KwargsType],
+    t.Awaitable[None],
+]
+OnJobPostrunType = t.Callable[
+    [JobCtx, arq.worker.Function, ArgsType, KwargsType, t.Any],
+    t.Awaitable[None],
+]
+OnJobPrepublishType = t.Callable[
+    [DataDict, arq.worker.Function, ArgsType, KwargsType],
+    t.Awaitable[None],
+]

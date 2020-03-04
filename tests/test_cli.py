@@ -4,8 +4,7 @@ from darq import Darq
 from darq.cli import cli
 from . import redis_settings
 
-darq_config = {'redis_settings': redis_settings, 'burst': True}
-darq = Darq(darq_config)
+darq = Darq(redis_settings=redis_settings, burst=True)
 
 
 @darq.task

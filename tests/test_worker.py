@@ -8,8 +8,6 @@ import pytest
 from darq import Darq
 from . import redis_settings
 
-darq_config = {'redis_settings': redis_settings}
-
 
 async def foobar():
     pass
@@ -19,7 +17,7 @@ async def foobar():
 async def test_handle_sig_delayed(caplog, worker_factory):
     caplog.set_level(logging.INFO)
 
-    darq = Darq(darq_config)
+    darq = Darq(redis_settings=redis_settings)
     darq.task(foobar)
 
     worker = await worker_factory(darq)
@@ -56,7 +54,7 @@ async def test_handle_sig_delayed(caplog, worker_factory):
 async def test_handle_sig_hard(event_loop, caplog, worker_factory):
     caplog.set_level(logging.INFO)
 
-    darq = Darq(darq_config)
+    darq = Darq(redis_settings=redis_settings)
     darq.task(foobar)
 
     worker = await worker_factory(darq)
