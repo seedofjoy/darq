@@ -158,12 +158,6 @@ class Darq:
         def _decorate(function: AnyCallable) -> AnyCallable:
             name = get_function_name(function)
 
-            arq_function = arq.worker.func(
-                coroutine=self.wrap_job_coroutine(function), name=name,
-                keep_result=keep_result, timeout=timeout, max_tries=max_tries,
-            )
-            self.registry.add(arq_function)
-
             async def delay(*args: t.Any, **kwargs: t.Any) -> t.Optional[Job]:
                 if queue and '_queue_name' not in kwargs:
                     kwargs['_queue_name'] = queue
@@ -177,6 +171,8 @@ class Darq:
                         'this function',
                     )
                 metadata: DataDict = {}
+
+                arq_function = self.registry.by_original_coro[function]
                 self.on_job_prepublish and await self.on_job_prepublish(
                     metadata, arq_function, args, kwargs,
                 )
@@ -185,6 +181,12 @@ class Darq:
                 return await self.redis_pool.enqueue_job(name, *args, **kwargs)
 
             function.delay = delay  # type: ignore
+            arq_function = arq.worker.func(
+                coroutine=self.wrap_job_coroutine(function), name=name,
+                keep_result=keep_result, timeout=timeout, max_tries=max_tries,
+            )
+            self.registry.add(arq_function)
+
             return function
 
         if func:

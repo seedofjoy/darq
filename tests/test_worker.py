@@ -14,7 +14,7 @@ async def foobar():
 
 
 @pytest.mark.asyncio
-async def test_handle_sig_delayed(caplog, worker_factory):
+async def test_handle_sig_delayed(caplog, arq_redis, worker_factory):
     caplog.set_level(logging.INFO)
 
     darq = Darq(redis_settings=redis_settings)
@@ -51,7 +51,7 @@ async def test_handle_sig_delayed(caplog, worker_factory):
 
 
 @pytest.mark.asyncio
-async def test_handle_sig_hard(event_loop, caplog, worker_factory):
+async def test_handle_sig_hard(caplog, worker_factory):
     caplog.set_level(logging.INFO)
 
     darq = Darq(redis_settings=redis_settings)
