@@ -157,7 +157,7 @@ async def test_task_self_enqueue(darq, caplog, worker_factory):
     ((), {'a': 2}, 44),
 ])
 async def test_on_job_callbacks(
-        func_args, func_kwargs, result, caplog, worker_factory,
+        func_args, func_kwargs, result, caplog, worker_factory, arq_redis,
 ):
     caplog.set_level(logging.INFO)
 
@@ -235,7 +235,7 @@ async def test_on_job_callbacks(
 
 
 @pytest.mark.asyncio
-async def test_add_cron_jobs(darq, caplog, worker_factory):
+async def test_add_cron_jobs(darq, caplog, worker_factory, arq_redis):
     caplog.set_level(logging.INFO)
 
     with pytest.raises(DarqException):
@@ -310,6 +310,7 @@ async def test_add_cron_jobs(darq, caplog, worker_factory):
 async def test_enqueue_job_params(
         enqueue_job_patched,
         darq_kwargs, task_kwargs, delay_args, delay_kwargs, expected_kwargs,
+        arq_redis,
 ):
     enqueue_job_patched.reset_mock()
 
@@ -322,6 +323,7 @@ async def test_enqueue_job_params(
         'tests.test_app.foobar',
         **expected_kwargs,
     )
+    await darq.disconnect()
 
 
 @pytest.mark.asyncio
@@ -331,9 +333,10 @@ async def test_enqueue_job_params(
     ({}, {'_queue_name': 'my_queue'}, 'my_queue'),
     ({'queue': 'my_q'}, {'_queue_name': 'new_q'}, 'new_q'),
 ])
-async def test_task_queue(task_kwargs, delay_kwargs, expected, darq):
+async def test_task_queue(arq_redis, task_kwargs, delay_kwargs, expected, darq):
     foobar_task = darq.task(foobar, **task_kwargs)
     await darq.connect()
 
     job = await foobar_task.delay(**delay_kwargs)
     assert job._queue_name == expected
+    await darq.disconnect()

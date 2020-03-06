@@ -1,7 +1,8 @@
 ## Changelog
 
-### 0.6.0 (2020-03-04)
+### 0.6.0 (2020-03-06)
 * **Breaking change**: Changed `Darq` constructor from single `config` param to separate params.
+* `arq_function.coroutine` now has `.delay` method.
 
 ### 0.5.0 (2020-03-03)
 * Add `on_job_prepublish(metadata, arq_function, args, kwargs)` callback. `metadata` is mutable dict, which will be available at `ctx['metadata']`.
