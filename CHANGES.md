@@ -1,6 +1,6 @@
 ## Changelog
 
-### 0.6.0 (2020-03-06)
+### 0.6.0 (2020-03-08)
 * **Breaking change**: Changed `Darq` constructor from single `config` param to separate params.
 * `arq_function.coroutine` now has `.delay` method.
 
