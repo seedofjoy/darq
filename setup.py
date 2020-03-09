@@ -34,9 +34,16 @@ setuptools.setup(
         'Typing :: Typed',
     ],
     install_requires=[
-        'arq>=0.18,<0.19',
+        'async-timeout>=3.0.0',
+        'aioredis>=1.1.0',
+        'click>=6.7',
+        'pydantic>=0.20',
+        'dataclasses>=0.6; python_version=="3.6"',
         'typing_extensions>=3.7.4; python_version<"3.8"',
     ],
+    extras_require={
+        'watch': ['watchgod>=0.4'],
+    },
     python_requires='>=3.6',
     license='MIT',
 )

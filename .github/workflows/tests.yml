@@ -27,16 +27,17 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --upgrade pip setuptools
         pip install -r requirements.txt
+        pip install -e .[watch]
 
     - name: Lint with mypy
       run: |
-        mypy .
+        mypy darq/
 
     - name: Lint with flake8
       run: |
-        flake8 . --count --show-source --statistics
+        flake8 darq/ test/ --count --show-source --statistics
 
     - name: Test with pytest
       env:

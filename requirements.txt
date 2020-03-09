@@ -1,2 +1,1 @@
 -r tests/requirements.txt
-arq>=0.18,<0.19
