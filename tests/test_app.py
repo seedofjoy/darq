@@ -57,7 +57,6 @@ async def cron_func():
     return 'ok'
 
 
-@pytest.mark.asyncio
 async def test_darq_connect_disconnect(darq):
     assert darq.redis_pool is None
 
@@ -68,21 +67,18 @@ async def test_darq_connect_disconnect(darq):
     assert darq.redis_pool and darq.redis_pool.connection.closed
 
 
-@pytest.mark.asyncio
 async def test_darq_not_connected(darq):
     foobar_task = darq.task(foobar)
     with pytest.raises(DarqConnectionError):
         await foobar_task.delay()
 
 
-@pytest.mark.asyncio
 async def test_job_works_like_a_function(darq):
     foobar_task = darq.task(foobar)
     assert await foobar_task(2) == 44
     assert await foobar_task(a=5) == 47
 
 
-@pytest.mark.asyncio
 async def test_task_decorator(darq, caplog, worker_factory):
     caplog.set_level(logging.INFO)
 
@@ -107,7 +103,6 @@ async def test_task_decorator(darq, caplog, worker_factory):
     ) in parse_log(caplog.records)
 
 
-@pytest.mark.asyncio
 async def test_task_parametrized(darq):
     assert len(darq.registry) == 0
 
@@ -130,7 +125,6 @@ async def test_task_parametrized(darq):
     assert arq_func.keep_result_s == keep_result
 
 
-@pytest.mark.asyncio
 async def test_task_self_enqueue(darq, caplog, worker_factory):
     caplog.set_level(logging.INFO)
 
@@ -151,7 +145,6 @@ async def test_task_self_enqueue(darq, caplog, worker_factory):
     ) in parse_log(caplog.records)
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize('func_args,func_kwargs,result', [
     ((1,), {}, 43),
     ((), {'a': 2}, 44),
@@ -234,7 +227,6 @@ async def test_on_job_callbacks(
     assert call_args[4] == result
 
 
-@pytest.mark.asyncio
 async def test_add_cron_jobs(darq, caplog, worker_factory, arq_redis):
     caplog.set_level(logging.INFO)
 
@@ -281,7 +273,6 @@ async def test_add_cron_jobs(darq, caplog, worker_factory, arq_redis):
     )
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     'darq_kwargs, task_kwargs, delay_args, delay_kwargs, expected_kwargs', [
         (
@@ -326,7 +317,6 @@ async def test_enqueue_job_params(
     await darq.disconnect()
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize('task_kwargs,delay_kwargs,expected', [
     ({}, {}, 'arq:queue'),
     ({'queue': 'my_q'}, {}, 'my_q'),

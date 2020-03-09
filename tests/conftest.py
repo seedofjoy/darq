@@ -7,6 +7,11 @@ from darq.worker import create_worker
 from . import redis_settings
 
 
+@pytest.fixture(autouse=True)
+async def auto_loop(loop):
+    yield loop
+
+
 @pytest.fixture
 async def arq_redis():
     redis_ = await create_redis_pool(

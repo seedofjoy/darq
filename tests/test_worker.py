@@ -3,8 +3,6 @@ import logging
 import signal
 from unittest.mock import MagicMock
 
-import pytest
-
 from darq import Darq
 from . import redis_settings
 
@@ -13,7 +11,6 @@ async def foobar():
     pass
 
 
-@pytest.mark.asyncio
 async def test_handle_sig_delayed(caplog, arq_redis, worker_factory):
     caplog.set_level(logging.INFO)
 
@@ -50,7 +47,6 @@ async def test_handle_sig_delayed(caplog, arq_redis, worker_factory):
     assert worker.tasks[1].cancel.call_count == 0
 
 
-@pytest.mark.asyncio
 async def test_handle_sig_hard(caplog, worker_factory):
     caplog.set_level(logging.INFO)
 
