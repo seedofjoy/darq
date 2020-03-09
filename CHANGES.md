@@ -1,5 +1,9 @@
 ## Changelog
 
+### 0.7.0 (2020.03-09)
+* Fork `arq` to project. It will be easier to rewrite `arq` than to write wrapper
+* Add `watch`-mode to CLI.
+
 ### 0.6.0 (2020-03-08)
 * **Breaking change**: Changed `Darq` constructor from single `config` param to separate params.
 * `arq_function.coroutine` now has `.delay` method.

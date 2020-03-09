@@ -64,12 +64,12 @@ class Worker(ArqWorker):
     async def run_jobs(self, job_ids: t.Sequence[str]) -> None:
         if self.warm_shutdown_task:
             return
-        await super().run_jobs(job_ids)  # type: ignore
+        await super().run_jobs(job_ids)
 
     async def run_cron(self) -> None:
         if self.warm_shutdown_task:
             return
-        await super().run_cron()  # type: ignore
+        await super().run_cron()
 
     def handle_sig(self, signum: int) -> None:
         if self.warm_shutdown_task:

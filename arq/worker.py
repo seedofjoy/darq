@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import logging
 import signal
+import typing as t
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
@@ -305,7 +306,7 @@ class Worker:
 
         await self.heart_beat()
 
-    async def run_jobs(self, job_ids):
+    async def run_jobs(self, job_ids: t.Sequence[str]) -> None:
         for job_id in job_ids:
             await self.sem.acquire()
             in_progress_key = in_progress_key_prefix + job_id
@@ -518,7 +519,7 @@ class Worker:
         await self.record_health()
         await self.run_cron()
 
-    async def run_cron(self):
+    async def run_cron(self) -> None:
         n = datetime.now()
         job_futures = set()
 
@@ -577,7 +578,7 @@ class Worker:
         self.main_task and self.main_task.cancel()
         self.on_stop and self.on_stop(sig)
 
-    async def close(self):
+    async def close(self) -> None:
         if not self.pool:
             return
         await asyncio.gather(*self.tasks)

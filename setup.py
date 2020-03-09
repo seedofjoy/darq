@@ -1,6 +1,9 @@
 import pathlib
+from importlib.machinery import SourceFileLoader
 
 import setuptools
+
+version = SourceFileLoader('version', 'darq/version.py').load_module()
 
 
 def readfile(filename: str) -> str:
@@ -14,7 +17,7 @@ long_description = '\n\n'.join((
 
 setuptools.setup(
     name='darq',
-    version='0.6.0',
+    version=str(version.VERSION),
     author='Igor Mozharovsky',
     author_email='igor.mozharovsky@gmail.com',
     description='A small wrapper around arq',
@@ -33,6 +36,9 @@ setuptools.setup(
         'Programming Language :: Python :: 3.8',
         'Typing :: Typed',
     ],
+    entry_points={
+        'console_scripts': ['darq = darq.cli:cli'],
+    },
     install_requires=[
         'async-timeout>=3.0.0',
         'aioredis>=1.1.0',
