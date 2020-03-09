@@ -28,7 +28,7 @@ async def arq_redis():
 async def worker_factory(arq_redis):
     worker_ = None
 
-    async def create(darq, queue=None):
+    def create(darq, queue=None):
         nonlocal worker_
         worker_ = create_worker(darq, queue=queue)
         return worker_

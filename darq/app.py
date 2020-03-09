@@ -6,12 +6,12 @@ import typing as t
 import arq
 from arq.connections import ArqRedis
 from arq.connections import RedisSettings
-from arq.cron import CronJob
 from arq.jobs import Deserializer
 from arq.jobs import Job
 from arq.jobs import Serializer
 from arq.utils import SecondsTimedelta
 
+from .cron import CronJob
 from .registry import Registry
 from .types import AnyCallable
 from .types import AnyTimedelta

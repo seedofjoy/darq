@@ -1,0 +1,247 @@
+import logging
+from datetime import datetime, timedelta
+from random import random
+
+import pytest
+
+from darq.app import DarqException
+from darq.cron import cron
+from darq.cron import next_cron
+from .test_app import assert_worker_job_finished
+
+
+@pytest.mark.parametrize('previous,expected,kwargs', [
+    (
+        datetime(2016, 6, 1, 12, 10, 10),
+        datetime(2016, 6, 1, 12, 10, 20, microsecond=123_456),
+        dict(second=20),
+    ),
+    (
+        datetime(2016, 6, 1, 12, 10, 10),
+        datetime(2016, 6, 1, 12, 11, 0, microsecond=123_456),
+        dict(minute=11),
+    ),
+    (
+        datetime(2016, 6, 1, 12, 10, 10),
+        datetime(2016, 6, 1, 12, 10, 20),
+        dict(second=20, microsecond=0)),
+    (
+        datetime(2016, 6, 1, 12, 10, 10),
+        datetime(2016, 6, 1, 12, 11, 0),
+        dict(minute=11, microsecond=0)),
+    (
+        datetime(2016, 6, 1, 12, 10, 11),
+        datetime(2017, 6, 1, 12, 10, 10, microsecond=123_456),
+        dict(month=6, day=1, hour=12, minute=10, second=10),
+    ),
+    (
+        datetime(2016, 6, 1, 12, 10, 10, microsecond=1),
+        datetime(2016, 7, 1, 12, 10, 10),
+        dict(day=1, hour=12, minute=10, second=10, microsecond=0),
+    ),
+    (
+        datetime(2032, 1, 31, 0, 0, 0),
+        datetime(2032, 2, 28, 0, 0, 0, microsecond=123_456),
+        dict(day=28),
+    ),
+    (
+        datetime(2032, 1, 1, 0, 5),
+        datetime(2032, 1, 1, 4, 0, microsecond=123_456),
+        dict(hour=4),
+    ),
+    (
+        datetime(2032, 1, 1, 0, 0),
+        datetime(2032, 1, 1, 4, 2, microsecond=123_456),
+        dict(hour=4, minute={2, 4, 6}),
+    ),
+    (
+        datetime(2032, 1, 1, 0, 5),
+        datetime(2032, 1, 1, 4, 2, microsecond=123_456),
+        dict(hour=4, minute={2, 4, 6}),
+    ),
+    (
+        datetime(2032, 2, 5, 0, 0, 0),
+        datetime(2032, 3, 31, 0, 0, 0, microsecond=123_456),
+        dict(day=31),
+    ),
+    (
+        datetime(2001, 1, 1, 0, 0, 0),  # Monday
+        datetime(2001, 1, 7, 0, 0, 0, microsecond=123_456),
+        dict(weekday='Sun'),  # Sunday
+    ),
+    (
+        datetime(2001, 1, 1, 0, 0, 0),
+        datetime(2001, 1, 7, 0, 0, 0, microsecond=123_456),
+        dict(weekday=6),  # Sunday
+    ),
+    (
+        datetime(2001, 1, 1, 0, 0, 0),
+        datetime(2001, 11, 7, 0, 0, 0, microsecond=123_456),
+        dict(month=11, weekday=2),
+    ),
+    (
+        datetime(2001, 1, 1, 0, 0, 0),
+        datetime(2001, 1, 3, 0, 0, 0, microsecond=123_456),
+        dict(weekday='wed'),
+    ),
+])
+def test_next_cron(previous, expected, kwargs):
+    assert next_cron(previous, **kwargs) == expected
+
+
+def test_next_cron_invalid():
+    with pytest.raises(ValueError):
+        next_cron(datetime(2001, 1, 1, 0, 0, 0), weekday='monday')
+
+
+@pytest.mark.parametrize('max_previous,kwargs,expected', [
+    (
+        1, dict(microsecond=59867),
+        datetime(2001, 1, 1, 0, 0, microsecond=59867),
+    ),
+    (
+        59, dict(second=28, microsecond=0),
+        datetime(2023, 1, 1, 1, 59, 28),
+    ),
+    (
+        3600, dict(minute=10, second=20),
+        datetime(2016, 6, 1, 12, 10, 20, microsecond=123_456),
+    ),
+    (
+        68400, dict(hour=3),
+        datetime(2032, 1, 1, 3, 0, 0, microsecond=123_456),
+    ),
+    (
+        68400 * 60, dict(day=31, minute=59),
+        datetime(2032, 3, 31, 0, 59, 0, microsecond=123_456),
+    ),
+    (
+        68400 * 7, dict(weekday='tues', minute=59),
+        datetime(2032, 3, 30, 0, 59, 0, microsecond=123_456),
+    ),
+    (
+        68400 * 175,  # previous friday the 13th is February
+        dict(day=13, weekday='fri', microsecond=1),
+        datetime(2032, 8, 13, 0, 0, 0, microsecond=1),
+    ),
+    (
+        68400 * 365, dict(month=10, day=4, hour=23),
+        datetime(2032, 10, 4, 23, 0, 0, microsecond=123_456)),
+    (
+        1, dict(month=1, day=1, hour=0, minute=0, second=0, microsecond=69875),
+        datetime(2001, 1, 1, 0, 0, microsecond=69875),
+    ),
+])
+def test_next_cron_random(max_previous, kwargs, expected):
+    for _ in range(100):
+        previous = expected - timedelta(seconds=0.9 + random() * max_previous)
+        v = next_cron(previous, **kwargs)
+        diff = v - previous
+        if diff > timedelta(seconds=1):
+            assert v == expected
+
+
+async def foobar():
+    return 42
+
+
+async def test_add_cron_jobs(darq, caplog, worker_factory, arq_redis):
+    caplog.set_level(logging.INFO)
+
+    with pytest.raises(DarqException):
+        darq.add_cron_jobs(cron(foobar))
+
+    foobar_task = darq.task(foobar)
+    darq.add_cron_jobs(
+        cron('tests.test_cron.foobar', run_at_startup=True),
+        cron(foobar, run_at_startup=True),
+        cron(foobar, run_at_startup=True),  # duplicate doesn't start
+        cron(foobar, name='custom_name', run_at_startup=True),
+        cron(foobar_task, name='custom_name2', run_at_startup=True),
+    )
+
+    worker = worker_factory(darq)
+    assert worker.jobs_complete == 0
+    assert worker.jobs_failed == 0
+    assert worker.jobs_retried == 0
+    await worker.main()
+    assert worker.jobs_complete == 4
+    assert worker.jobs_failed == 0
+    assert worker.jobs_retried == 0
+
+    assert_worker_job_finished(
+        records=caplog.records,
+        job_id='cron',
+        function_name='tests.test_cron.foobar',
+        result='42',
+    )
+    assert_worker_job_finished(
+        records=caplog.records,
+        job_id='cron',
+        function_name='foobar',
+        result='42',
+    )
+    assert_worker_job_finished(
+        records=caplog.records,
+        job_id='',
+        function_name='custom_name',
+        result='42',
+    )
+    assert_worker_job_finished(
+        records=caplog.records,
+        job_id='',
+        function_name='custom_name2',
+        result='42',
+    )
+
+
+async def test_job_successful_on_specific_queue(darq, worker_factory, caplog):
+    caplog.set_level(logging.INFO)
+
+    foobar_task = darq.task(foobar)
+    darq.add_cron_jobs(
+        cron(foobar_task, hour=1, run_at_startup=True),
+    )
+    worker = worker_factory(darq, queue='darq:test-cron-queue')
+    await worker.main()
+    assert worker.jobs_complete == 1
+    assert worker.jobs_failed == 0
+    assert worker.jobs_retried == 0
+
+    assert_worker_job_finished(
+        records=caplog.records,
+        job_id='cron',
+        function_name='foobar',
+        result='42',
+    )
+
+
+async def test_not_run(darq, worker_factory, caplog, arq_redis):
+    caplog.set_level(logging.INFO)
+
+    foobar_task = darq.task(foobar)
+    darq.add_cron_jobs(
+        cron(foobar_task, hour=1, run_at_startup=False),
+    )
+    worker = worker_factory(darq)
+    await worker.main()
+    assert worker.jobs_complete == 0
+    assert worker.jobs_failed == 0
+    assert worker.jobs_retried == 0
+
+    log = '\n'.join(r.message for r in caplog.records)
+    assert 'cron:foobar()' not in log
+
+
+async def test_repr():
+    cj = cron(foobar, hour=1, run_at_startup=True)
+    assert str(cj).startswith(
+        '<CronJob name=cron:foobar coroutine=<function foobar at',
+    )
+
+
+async def test_str_function():
+    cj = cron('asyncio.sleep', hour=1, run_at_startup=True)
+    assert str(cj).startswith(
+        '<CronJob name=cron:asyncio.sleep coroutine=<function sleep at',
+    )

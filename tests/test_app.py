@@ -8,10 +8,8 @@ from arq.connections import ArqRedis
 from asynctest import CoroutineMock
 from asynctest import patch
 
-from darq import cron
 from darq import Darq
 from darq.app import DarqConnectionError
-from darq.app import DarqException
 from . import redis_settings
 
 
@@ -88,7 +86,7 @@ async def test_task_decorator(darq, caplog, worker_factory):
 
     await foobar_task.delay(a=1, _job_id='testing')
 
-    worker = await worker_factory(darq)
+    worker = worker_factory(darq)
     assert worker.jobs_complete == 0
     assert worker.jobs_failed == 0
     assert worker.jobs_retried == 0
@@ -133,7 +131,7 @@ async def test_task_self_enqueue(darq, caplog, worker_factory):
     await darq.connect()
     await foobar_task.delay(1, _job_id='testing', enqueue_self=True)
 
-    worker = await worker_factory(darq)
+    worker = worker_factory(darq)
     await worker.main()
 
     assert worker.jobs_complete == 2
@@ -189,7 +187,7 @@ async def test_on_job_callbacks(
 
     on_job_prepublish.assert_called_once()
 
-    worker = await worker_factory(darq)
+    worker = worker_factory(darq)
     await worker.main()
 
     assert_worker_job_finished(
@@ -225,52 +223,6 @@ async def test_on_job_callbacks(
     assert call_args[2] == func_args
     assert call_args[3] == func_kwargs
     assert call_args[4] == result
-
-
-async def test_add_cron_jobs(darq, caplog, worker_factory, arq_redis):
-    caplog.set_level(logging.INFO)
-
-    with pytest.raises(DarqException):
-        darq.add_cron_jobs(cron(cron_func))
-
-    cron_func_task = darq.task(cron_func)
-    darq.add_cron_jobs(
-        cron('tests.test_app.cron_func', run_at_startup=True),
-        cron(cron_func, run_at_startup=True),
-        cron(cron_func, run_at_startup=True),  # duplicate doesn't start
-        cron(cron_func, name='custom_name', run_at_startup=True),
-        cron(cron_func_task, name='custom_name2', run_at_startup=True),
-    )
-
-    worker = await worker_factory(darq)
-    assert worker.jobs_complete == 0
-    await worker.main()
-    assert worker.jobs_complete == 4
-
-    assert_worker_job_finished(
-        records=caplog.records,
-        job_id='cron',
-        function_name='tests.test_app.cron_func',
-        result="'ok'",
-    )
-    assert_worker_job_finished(
-        records=caplog.records,
-        job_id='cron',
-        function_name='cron_func',
-        result="'ok'",
-    )
-    assert_worker_job_finished(
-        records=caplog.records,
-        job_id='',
-        function_name='custom_name',
-        result="'ok'",
-    )
-    assert_worker_job_finished(
-        records=caplog.records,
-        job_id='',
-        function_name='custom_name2',
-        result="'ok'",
-    )
 
 
 @pytest.mark.parametrize(
