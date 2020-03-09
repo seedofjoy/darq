@@ -1,15 +1,19 @@
 import asyncio
+import typing as t
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Callable, Optional, Union
+from datetime import datetime
+from datetime import timedelta
 
+from arq.utils import SecondsTimedelta
+from arq.utils import to_seconds
 from pydantic.utils import import_string
 
-from arq.utils import SecondsTimedelta, to_seconds
+
+R = t.TypeVar('R')
+Coro = t.TypeVar('Coro', bound=t.Callable[..., t.Awaitable[R]])
 
 
-class D(str, Enum):
+class D:
     month = 'month'
     day = 'day'
     weekday = 'weekday'
@@ -23,7 +27,9 @@ dt_fields = D.month, D.day, D.weekday, D.hour, D.minute, D.second, D.microsecond
 weekdays = 'mon', 'tues', 'wed', 'thurs', 'fri', 'sat', 'sun'
 
 
-def _get_next_dt(dt_, options):  # noqa: C901
+def _get_next_dt(
+        dt_: datetime, options: t.Dict[str, t.Any],
+) -> t.Optional[datetime]:
     for field in dt_fields:
         v = options[field]
         if v is None:
@@ -37,7 +43,7 @@ def _get_next_dt(dt_, options):  # noqa: C901
         else:
             assert isinstance(v, (set, list, tuple))
             mismatch = next_v not in v
-        # print(field, v, next_v, mismatch)
+
         if mismatch:
             micro = max(dt_.microsecond - options[D.microsecond], 0)
             if field == D.month:
@@ -49,30 +55,51 @@ def _get_next_dt(dt_, options):  # noqa: C901
                 return (
                     dt_
                     + timedelta(days=1)
-                    - timedelta(hours=dt_.hour, minutes=dt_.minute, seconds=dt_.second, microseconds=micro)
+                    - timedelta(
+                        hours=dt_.hour, minutes=dt_.minute, seconds=dt_.second,
+                        microseconds=micro,
+                    )
                 )
             elif field == D.hour:
-                return dt_ + timedelta(hours=1) - timedelta(minutes=dt_.minute, seconds=dt_.second, microseconds=micro)
+                return (
+                    dt_
+                    + timedelta(hours=1)
+                    - timedelta(
+                        minutes=dt_.minute, seconds=dt_.second,
+                        microseconds=micro,
+                    )
+                )
             elif field == D.minute:
-                return dt_ + timedelta(minutes=1) - timedelta(seconds=dt_.second, microseconds=micro)
+                return (
+                    dt_
+                    + timedelta(minutes=1)
+                    - timedelta(seconds=dt_.second, microseconds=micro)
+                )
             elif field == D.second:
-                return dt_ + timedelta(seconds=1) - timedelta(microseconds=micro)
+                return (
+                    dt_
+                    + timedelta(seconds=1)
+                    - timedelta(microseconds=micro)
+                )
             else:
                 assert field == D.microsecond, field
-                return dt_ + timedelta(microseconds=options['microsecond'] - dt_.microsecond)
+                return dt_ + timedelta(
+                    microseconds=options['microsecond'] - dt_.microsecond,
+                )
+    return None
 
 
 def next_cron(
     previous_dt: datetime,
     *,
-    month: Union[None, set, int] = None,
-    day: Union[None, set, int] = None,
-    weekday: Union[None, set, int, str] = None,
-    hour: Union[None, set, int] = None,
-    minute: Union[None, set, int] = None,
-    second: Union[None, set, int] = 0,
+    month: t.Union[None, t.Sequence[int], int] = None,
+    day: t.Union[None, t.Sequence[int], int] = None,
+    weekday: t.Union[None, t.Sequence[int], int, str] = None,
+    hour: t.Union[None, t.Sequence[int], int] = None,
+    minute: t.Union[None, t.Sequence[int], int] = None,
+    second: t.Union[None, t.Sequence[int], int] = 0,
     microsecond: int = 123_456,
-):
+) -> datetime:
     """
     Find the next datetime matching the given parameters.
     """
@@ -80,12 +107,12 @@ def next_cron(
     if isinstance(weekday, str):
         weekday = weekdays.index(weekday.lower())
     options = dict(
-        month=month, day=day, weekday=weekday, hour=hour, minute=minute, second=second, microsecond=microsecond
+        month=month, day=day, weekday=weekday, hour=hour, minute=minute,
+        second=second, microsecond=microsecond,
     )
 
     while True:
         next_dt = _get_next_dt(dt, options)
-        # print(dt, next_dt)
         if next_dt is None:
             return dt
         dt = next_dt
@@ -94,22 +121,22 @@ def next_cron(
 @dataclass
 class CronJob:
     name: str
-    coroutine: Callable
-    month: Union[None, set, int]
-    day: Union[None, set, int]
-    weekday: Union[None, set, int, str]
-    hour: Union[None, set, int]
-    minute: Union[None, set, int]
-    second: Union[None, set, int]
+    coroutine: t.Callable[..., t.Awaitable[R]]
+    month: t.Union[None, t.Sequence[int], int]
+    day: t.Union[None, t.Sequence[int], int]
+    weekday: t.Union[None, t.Sequence[int], int, str]
+    hour: t.Union[None, t.Sequence[int], int]
+    minute: t.Union[None, t.Sequence[int], int]
+    second: t.Union[None, t.Sequence[int], int]
     microsecond: int
     run_at_startup: bool
     unique: bool
-    timeout_s: Optional[float]
-    keep_result_s: Optional[float]
-    max_tries: Optional[int]
-    next_run: datetime = None
+    timeout_s: t.Optional[float]
+    keep_result_s: t.Optional[float]
+    max_tries: t.Optional[int]
+    next_run: t.Optional[datetime] = None
 
-    def set_next(self, dt: datetime):
+    def set_next(self, dt: datetime) -> None:
         self.next_run = next_cron(
             dt,
             month=self.month,
@@ -121,32 +148,35 @@ class CronJob:
             microsecond=self.microsecond,
         )
 
-    def __repr__(self):
-        return '<CronJob {}>'.format(' '.join(f'{k}={v}' for k, v in self.__dict__.items()))
+    def __repr__(self) -> str:
+        return '<CronJob {}>'.format(
+            ' '.join(f'{k}={v}' for k, v in self.__dict__.items()),
+        )
 
 
 def cron(
-    coroutine: Union[str, Callable],
+    coroutine: t.Union[str, Coro],
     *,
-    name: Optional[str] = None,
-    month: Union[None, set, int] = None,
-    day: Union[None, set, int] = None,
-    weekday: Union[None, set, int, str] = None,
-    hour: Union[None, set, int] = None,
-    minute: Union[None, set, int] = None,
-    second: Union[None, set, int] = 0,
+    name: t.Optional[str] = None,
+    month: t.Union[None, t.Sequence[int], int] = None,
+    day: t.Union[None, t.Sequence[int], int] = None,
+    weekday: t.Union[None, t.Sequence[int], int, str] = None,
+    hour: t.Union[None, t.Sequence[int], int] = None,
+    minute: t.Union[None, t.Sequence[int], int] = None,
+    second: t.Union[None, t.Sequence[int], int] = 0,
     microsecond: int = 123_456,
     run_at_startup: bool = False,
     unique: bool = True,
-    timeout: Optional[SecondsTimedelta] = None,
-    keep_result: Optional[float] = 0,
-    max_tries: Optional[int] = 1,
+    timeout: t.Optional[SecondsTimedelta] = None,
+    keep_result: t.Optional[float] = 0,
+    max_tries: t.Optional[int] = 1,
 ) -> CronJob:
     """
     Create a cron job, eg. it should be executed at specific times.
 
-    Workers will enqueue this job at or just after the set times. If ``unique`` is true (the default) the
-    job will only be run once even if multiple workers are running.
+    Workers will enqueue this job at or just after the set times.
+    If ``unique`` is true (the default) the job will only be run once even
+    if multiple workers are running.
 
     :param coroutine: coroutine function to run
     :param name: name of the job, if None, the name of the coroutine is used
@@ -156,8 +186,8 @@ def cron(
     :param hour: hour(s) to run the job on, 0 - 23
     :param minute: minute(s) to run the job on, 0 - 59
     :param second: second(s) to run the job on, 0 - 59
-    :param microsecond: microsecond(s) to run the job on,
-        defaults to 123456 as the world is busier at the top of a second, 0 - 1e6
+    :param microsecond: microsecond(s) to run the job on, defaults to 123456
+        as the world is busier at the top of a second, 0 - 1e6
     :param run_at_startup: whether to run as worker starts
     :param unique: whether the job should be only be executed once at each time
     :param timeout: job timeout
@@ -169,7 +199,10 @@ def cron(
         name = name or 'cron:' + coroutine
         coroutine = import_string(coroutine)
 
-    assert asyncio.iscoroutinefunction(coroutine), f'{coroutine} is not a coroutine function'
+    coroutine = t.cast(Coro, coroutine)
+
+    assert asyncio.iscoroutinefunction(coroutine), \
+        f'{coroutine} is not a coroutine function'
     timeout = to_seconds(timeout)
     keep_result = to_seconds(keep_result)
 

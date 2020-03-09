@@ -32,7 +32,8 @@ def test_check():
     runner = CliRunner()
     result = runner.invoke(cli, ['tests.test_cli.darq', '--check'])
     assert result.exit_code == 1
-    assert 'Health check failed: no health check sentinel value found' in result.output
+    expected = 'Health check failed: no health check sentinel value found'
+    assert expected in result.output
 
 
 async def mock_awatch():

@@ -17,7 +17,7 @@ async def test_handle_sig_delayed(caplog, arq_redis, worker_factory):
     darq = Darq(redis_settings=redis_settings)
     darq.task(foobar)
 
-    worker = await worker_factory(darq)
+    worker = worker_factory(darq)
 
     long_running_task_mock = MagicMock(done=MagicMock(return_value=False))
     worker.main_task = MagicMock()
@@ -53,7 +53,7 @@ async def test_handle_sig_hard(caplog, worker_factory):
     darq = Darq(redis_settings=redis_settings)
     darq.task(foobar)
 
-    worker = await worker_factory(darq)
+    worker = worker_factory(darq)
 
     long_running_task_mock = MagicMock(done=MagicMock(return_value=False))
     worker.main_task = MagicMock()
