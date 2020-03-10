@@ -22,7 +22,8 @@ def test_help():
 
 def test_run():
     runner = CliRunner()
-    result = runner.invoke(cli, ['tests.test_cli.darq'])
+    with loop_context():
+        result = runner.invoke(cli, ['tests.test_cli.darq'])
     assert result.exit_code == 0
     cli_output = 'Starting worker for 1 functions: tests.test_cli.foobar'
     assert cli_output in result.output
@@ -30,7 +31,8 @@ def test_run():
 
 def test_check():
     runner = CliRunner()
-    result = runner.invoke(cli, ['tests.test_cli.darq', '--check'])
+    with loop_context():
+        result = runner.invoke(cli, ['tests.test_cli.darq', '--check'])
     assert result.exit_code == 1
     expected = 'Health check failed: no health check sentinel value found'
     assert expected in result.output
