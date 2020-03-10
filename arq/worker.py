@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 import logging
 import signal
 import typing as t
@@ -14,31 +13,36 @@ import async_timeout
 from aioredis import MultiExecError
 from pydantic.utils import import_string
 
-from arq.jobs import Deserializer, SerializationError, Serializer, deserialize_job_raw, serialize_result
 from darq.cron import CronJob
+from .connections import ArqRedis
+from .connections import create_pool
+from .connections import log_redis_info
+from .connections import RedisSettings
+from .constants import default_queue_name
+from .constants import health_check_key_suffix
+from .constants import in_progress_key_prefix
+from .constants import job_key_prefix
+from .constants import result_key_prefix
+from .constants import retry_key_prefix
+from .jobs import deserialize_job_raw
+from .jobs import Deserializer
+from .jobs import SerializationError
+from .jobs import serialize_result
+from .jobs import Serializer
+from .utils import args_to_string
+from .utils import ms_to_datetime
+from .utils import poll
+from .utils import SecondsTimedelta
+from .utils import timestamp_ms
+from .utils import to_ms
+from .utils import to_seconds
+from .utils import to_unix_ms
+from .utils import truncate
 
-from .connections import ArqRedis, RedisSettings, create_pool, log_redis_info
-from .constants import (
-    default_queue_name,
-    health_check_key_suffix,
-    in_progress_key_prefix,
-    job_key_prefix,
-    result_key_prefix,
-    retry_key_prefix,
-)
-from .utils import (
-    SecondsTimedelta,
-    args_to_string,
-    ms_to_datetime,
-    poll,
-    timestamp_ms,
-    to_ms,
-    to_seconds,
-    to_unix_ms,
-    truncate,
-)
+if t.TYPE_CHECKING:
+    from darq import Darq
 
-logger = logging.getLogger('arq.worker')
+log = logging.getLogger('arq.worker')
 no_result = object()
 
 
@@ -265,8 +269,8 @@ class Worker:
         if self.pool is None:
             self.pool = await create_pool(self.redis_settings)
 
-        logger.info('Starting worker for %d functions: %s', len(self.functions), ', '.join(self.functions))
-        await log_redis_info(self.pool, logger.info)
+        log.info('Starting worker for %d functions: %s', len(self.functions), ', '.join(self.functions))
+        await log_redis_info(self.pool, log.info)
         self.ctx['redis'] = self.pool
         if self.on_startup:
             await self.on_startup(self.ctx)
@@ -329,7 +333,7 @@ class Worker:
                 except MultiExecError:
                     # job already started elsewhere since we got 'existing'
                     self.sem.release()
-                    logger.debug('multi-exec error, job %s already started elsewhere', job_id)
+                    log.debug('multi-exec error, job %s already started elsewhere', job_id)
                     # https://github.com/samuelcolvin/arq/issues/131, avoid warnings in log
                     await asyncio.gather(*tr._results, return_exceptions=True)
                 else:
@@ -364,7 +368,7 @@ class Worker:
             await asyncio.shield(self.abort_job(job_id, result_data_))
 
         if not v:
-            logger.warning('job %s expired', job_id)
+            log.warning('job %s expired', job_id)
             return await job_failed(JobExecutionFailed('job expired'))
 
         try:
@@ -372,13 +376,13 @@ class Worker:
                 v, deserializer=self.job_deserializer
             )
         except SerializationError as e:
-            logger.exception('deserializing job %s failed', job_id)
+            log.exception('deserializing job %s failed', job_id)
             return await job_failed(e)
 
         try:
             function: Union[Function, CronJob] = self.functions[function_name]
         except KeyError:
-            logger.warning('job %s, function %r not found', job_id, function_name)
+            log.warning('job %s, function %r not found', job_id, function_name)
             return await job_failed(JobExecutionFailed(f'function {function_name!r} not found'))
 
         if hasattr(function, 'next_run'):
@@ -394,7 +398,7 @@ class Worker:
         max_tries = self.max_tries if function.max_tries is None else function.max_tries
         if job_try > max_tries:
             t = (timestamp_ms() - enqueue_time_ms) / 1000
-            logger.warning('%6.2fs ! %s max retries %d exceeded', t, ref, max_tries)
+            log.warning('%6.2fs ! %s max retries %d exceeded', t, ref, max_tries)
             self.jobs_failed += 1
             result_data = serialize_result(
                 function_name,
@@ -430,7 +434,7 @@ class Worker:
             extra = f' try={job_try}' if job_try > 1 else ''
             if (start_ms - score) > 1200:
                 extra += f' delayed={(start_ms - score) / 1000:0.2f}s'
-            logger.info('%6.2fs → %s(%s)%s', (start_ms - enqueue_time_ms) / 1000, ref, s, extra)
+            log.info('%6.2fs → %s(%s)%s', (start_ms - enqueue_time_ms) / 1000, ref, s, extra)
             # run repr(result) and extra inside try/except as they can raise exceptions
             try:
                 async with async_timeout.timeout(timeout_s):
@@ -447,15 +451,15 @@ class Worker:
             t = (finished_ms - start_ms) / 1000
             if self.retry_jobs and isinstance(e, Retry):
                 incr_score = e.defer_score
-                logger.info('%6.2fs ↻ %s retrying job in %0.2fs', t, ref, (e.defer_score or 0) / 1000)
+                log.info('%6.2fs ↻ %s retrying job in %0.2fs', t, ref, (e.defer_score or 0) / 1000)
                 if e.defer_score:
                     incr_score = e.defer_score + (timestamp_ms() - score)
                 self.jobs_retried += 1
             elif self.retry_jobs and isinstance(e, asyncio.CancelledError):
-                logger.info('%6.2fs ↻ %s cancelled, will be run again', t, ref)
+                log.info('%6.2fs ↻ %s cancelled, will be run again', t, ref)
                 self.jobs_retried += 1
             else:
-                logger.exception(
+                log.exception(
                     '%6.2fs ! %s failed, %s: %s', t, ref, e.__class__.__name__, e, extra={'extra': exc_extra}
                 )
                 result = e
@@ -464,7 +468,7 @@ class Worker:
         else:
             success = True
             finished_ms = timestamp_ms()
-            logger.info('%6.2fs ← %s ● %s', (finished_ms - start_ms) / 1000, ref, result_str)
+            log.info('%6.2fs ← %s ● %s', (finished_ms - start_ms) / 1000, ref, result_str)
             finish = True
             self.jobs_complete += 1
 
@@ -551,7 +555,7 @@ class Worker:
         await self.pool.setex(self.health_check_key, self.health_check_interval + 1, info.encode())
         log_suffix = info[info.index('j_complete=') :]
         if self._last_health_check_log and log_suffix != self._last_health_check_log:
-            logger.info('recording health: %s', info)
+            log.info('recording health: %s', info)
             self._last_health_check_log = log_suffix
         elif not self._last_health_check_log:
             self._last_health_check_log = log_suffix
@@ -564,7 +568,7 @@ class Worker:
 
     def handle_sig(self, signum):
         sig = Signals(signum)
-        logger.info(
+        log.info(
             'shutdown on %s ◆ %d jobs complete ◆ %d failed ◆ %d retries ◆ %d ongoing to cancel',
             sig.name,
             self.jobs_complete,
@@ -596,51 +600,34 @@ class Worker:
         )
 
 
-def get_kwargs(settings_cls):
-    worker_args = set(inspect.signature(Worker).parameters.keys())
-    d = settings_cls if isinstance(settings_cls, dict) else settings_cls.__dict__
-    return {k: v for k, v in d.items() if k in worker_args}
-
-
-def create_worker(settings_cls, **kwargs) -> Worker:
-    return Worker(**{**get_kwargs(settings_cls), **kwargs})
-
-
-def run_worker(settings_cls, **kwargs) -> Worker:
-    worker = create_worker(settings_cls, **kwargs)
-    worker.run()
-    return worker
-
-
 async def async_check_health(
-    redis_settings: Optional[RedisSettings], health_check_key: Optional[str] = None, queue_name: Optional[str] = None
-):
+        redis_settings: t.Optional[RedisSettings],
+        health_check_key: t.Optional[str] = None,
+        queue: t.Optional[str] = None,
+) -> int:
     redis_settings = redis_settings or RedisSettings()
-    redis: ArqRedis = await create_pool(redis_settings)
-    queue_name = queue_name or default_queue_name
-    health_check_key = health_check_key or (queue_name + health_check_key_suffix)
+    redis = await create_pool(redis_settings)
+    queue = queue or default_queue_name
+    health_check_key = health_check_key or (queue + health_check_key_suffix)
 
     data = await redis.get(health_check_key)
     if not data:
-        logger.warning('Health check failed: no health check sentinel value found')
-        r = 1
+        log.warning('Health check failed: no health check sentinel value found')
+        result = 1
     else:
-        logger.info('Health check successful: %s', data)
-        r = 0
+        log.info('Health check successful: %s', data)
+        result = 0
     redis.close()
     await redis.wait_closed()
-    return r
+    return result
 
 
-def check_health(settings_cls) -> int:
+def check_health(darq: 'Darq', queue: str) -> int:
     """
     Run a health check on the worker and return the appropriate exit code.
     :return: 0 if successful, 1 if not
     """
-    cls_kwargs = get_kwargs(settings_cls)
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(
-        async_check_health(
-            cls_kwargs.get('redis_settings'), cls_kwargs.get('health_check_key'), cls_kwargs.get('queue_name')
-        )
+        async_check_health(darq.redis_settings, darq.health_check_key, queue),
     )

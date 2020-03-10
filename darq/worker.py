@@ -2,7 +2,6 @@ import asyncio
 import logging
 import typing as t
 
-from arq.worker import async_check_health
 from arq.worker import Function  # noqa: F401  need for reimport
 from arq.worker import Worker as ArqWorker
 
@@ -11,7 +10,7 @@ from .types import DataDict
 from .types import JobCtx
 from .utils import poll
 
-logger = logging.getLogger('arq.worker')
+log = logging.getLogger('darq.worker')
 
 
 class Worker(ArqWorker):
@@ -83,7 +82,7 @@ class Worker(ArqWorker):
     async def warm_shutdown(self, signum: int) -> None:
         if self.has_running_tasks():
             awaiting_task_count = sum(not task.done() for task in self.tasks)
-            logger.info(
+            log.info(
                 'Warm shutdown. Awaiting for %d jobs with %d seconds timeout.',
                 awaiting_task_count, self.warm_shutdown_timeout,
             )
@@ -102,14 +101,3 @@ def run_worker(darq: Darq, queue: str) -> Worker:
     worker = create_worker(darq, queue)
     worker.run()
     return worker
-
-
-def check_health(darq: Darq, queue: str) -> int:
-    """
-    Run a health check on the worker and return the appropriate exit code.
-    :return: 0 if successful, 1 if not
-    """
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(
-        async_check_health(darq.redis_settings, darq.health_check_key, queue),
-    )
