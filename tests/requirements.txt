@@ -1,6 +1,7 @@
 pytest==5.3.5
 pytest-aiohttp==0.3.0
 pytest-mock==2.0.0
+pytest-toolbox==0.4
 asynctest==0.13.0
 mypy==0.761
 flake8==3.7.9
