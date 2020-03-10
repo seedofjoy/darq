@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import typing as t
 from datetime import datetime, timedelta, timezone
 from time import time
 from typing import Optional, Union
@@ -41,12 +42,16 @@ def to_ms(td: Optional[SecondsTimedelta]) -> Optional[int]:
     return as_int(td * 1000)
 
 
+def to_seconds_strict(td: SecondsTimedelta) -> float:
+    if isinstance(td, timedelta):
+        return td.total_seconds()
+    return td
+
+
 def to_seconds(td: Optional[SecondsTimedelta]) -> Optional[float]:
     if td is None:
         return td
-    elif isinstance(td, timedelta):
-        return td.total_seconds()
-    return td
+    return to_seconds_strict(td)
 
 
 async def poll(step: float = 0.5):
@@ -75,7 +80,9 @@ def truncate(s: str, length: int = DEFAULT_CURTAIL) -> str:
     return s
 
 
-def args_to_string(args, kwargs):
+def args_to_string(
+        args: t.Sequence[t.Any], kwargs: t.Mapping[t.Any, t.Any],
+) -> str:
     arguments = ''
     if args:
         arguments = ', '.join(map(repr, args))

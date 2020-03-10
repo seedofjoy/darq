@@ -73,7 +73,7 @@ class Worker(ArqWorker):
     def handle_sig(self, signum: int) -> None:
         if self.warm_shutdown_task:
             self.warm_shutdown_task.cancel()
-            super().handle_sig(signum)  # type: ignore
+            super().handle_sig(signum)
         else:
             self.warm_shutdown_task = self.loop.create_task(
                 self.warm_shutdown(signum),
@@ -90,7 +90,7 @@ class Worker(ArqWorker):
                 if not self.has_running_tasks():
                     break
 
-        super().handle_sig(signum)  # type: ignore
+        super().handle_sig(signum)
 
 
 def create_worker(darq: Darq, queue: str) -> Worker:
