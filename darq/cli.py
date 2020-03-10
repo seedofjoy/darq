@@ -7,11 +7,11 @@ from signal import Signals
 
 import click
 from arq.logs import default_log_config
+from arq.worker import check_health
 from pydantic.utils import import_string
 
 from .app import Darq
 from .version import VERSION
-from .worker import check_health
 from .worker import create_worker
 from .worker import run_worker
 
