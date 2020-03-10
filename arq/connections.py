@@ -1,6 +1,7 @@
 import asyncio
 import functools
 import logging
+import typing as t
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from operator import attrgetter
@@ -222,7 +223,9 @@ async def create_pool(
     )
 
 
-async def log_redis_info(redis, log_func):
+async def log_redis_info(
+        redis: ArqRedis, log_func: t.Callable[[str], None],
+) -> None:
     with await redis as r:
         info, key_count = await asyncio.gather(r.info(), r.dbsize())
     log_func(
