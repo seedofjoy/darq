@@ -37,6 +37,40 @@ class DarqConfigError(DarqException):
 
 
 class Darq:
+    """
+    Darq application.
+
+    :param redis_settings: settings for creating a redis connection
+    :param redis_pool: existing redis pool, generally None
+    :param burst: whether to stop the worker once all jobs have been run
+    :param on_startup: coroutine function to run at worker startup
+    :param on_shutdown: coroutine function to run at worker shutdown
+    :param on_job_prerun: coroutine function to run before job starts
+    :param on_job_postrun: coroutine function to run after job finish
+    :param on_job_prepublish: coroutine function to run before enqueue job
+    :param max_jobs: maximum number of jobs to run at a time
+    :param job_timeout: default job timeout (max run time)
+    :param keep_result: default duration to keep job results for
+    :param poll_delay: duration between polling the queue for new jobs
+    :param queue_read_limit: the maximum number of jobs to pull from the queue
+                             each time it's polled;
+                             by default it equals ``max_jobs``
+    :param max_tries: default maximum number of times to retry a job
+    :param health_check_interval: how often to set the health check key
+    :param health_check_key: redis key under which health check is set
+    :param ctx: dict object, data from it will be pass to hooks:
+                ``on_startup``, ``on_shutdown`` - can modify ``ctx``;
+                ``on_job_prerun``, ``on_job_postrun`` - readonly
+    :param retry_jobs: whether to retry jobs on Retry or CancelledError or not
+    :param max_burst_jobs: the maximum number of jobs to process in burst mode
+                           (disabled with negative values)
+    :param job_serializer: a function that serializes Python objects to bytes,
+                           defaults to pickle.dumps
+    :param job_deserializer: a function that deserializes bytes into Python
+                             objects, defaults to pickle.loads
+    :param default_job_expires: default job expires. If the job still hasn't
+                                started after this duration, do not run it
+    """
 
     def __init__(
             self,
@@ -45,6 +79,9 @@ class Darq:
             burst: bool = False,
             on_startup: t.Callable[[CtxType], t.Awaitable[None]] = None,
             on_shutdown: t.Callable[[CtxType], t.Awaitable[None]] = None,
+            on_job_prerun: t.Optional[OnJobPrerunType] = None,
+            on_job_postrun: t.Optional[OnJobPostrunType] = None,
+            on_job_prepublish: t.Optional[OnJobPrepublishType] = None,
             max_jobs: int = 10,
             job_timeout: SecondsTimedelta = 300,
             keep_result: SecondsTimedelta = 3600,
@@ -59,15 +96,15 @@ class Darq:
             job_serializer: t.Optional[Serializer] = None,
             job_deserializer: t.Optional[Deserializer] = None,
             default_job_expires: AnyTimedelta = TD_1_DAY,
-            on_job_prerun: t.Optional[OnJobPrerunType] = None,
-            on_job_postrun: t.Optional[OnJobPostrunType] = None,
-            on_job_prepublish: t.Optional[OnJobPrepublishType] = None,
     ) -> None:
         self.redis_settings = redis_settings
         self.redis_pool = redis_pool
         self.burst = burst
         self.on_startup = on_startup
         self.on_shutdown = on_shutdown
+        self.on_job_prerun = on_job_prerun
+        self.on_job_postrun = on_job_postrun
+        self.on_job_prepublish = on_job_prepublish
         self.max_jobs = max_jobs
         self.job_timeout = job_timeout
         self.keep_result = keep_result
@@ -81,12 +118,9 @@ class Darq:
         self.max_burst_jobs = max_burst_jobs
         self.job_serializer = job_serializer
         self.job_deserializer = job_deserializer
+        self.default_job_expires = default_job_expires
 
         self.cron_jobs: t.List[CronJob] = []
-        self.default_job_expires = default_job_expires
-        self.on_job_prerun = on_job_prerun
-        self.on_job_postrun = on_job_postrun
-        self.on_job_prepublish = on_job_prepublish
         self.registry = Registry()
 
     async def connect(self, redis_pool: t.Optional[ArqRedis] = None) -> None:
@@ -109,6 +143,10 @@ class Darq:
             importlib.import_module(pkg)
 
     def add_cron_jobs(self, *cron_jobs: CronJob) -> None:
+        """
+        :param cron_jobs: list of cron jobs to run,
+                          use :func:`darq.cron.cron` to create them
+        """
         registered_coroutines = {f.coroutine for f in self.registry.values()}
         for cj in cron_jobs:
             if not isinstance(cj, CronJob):
