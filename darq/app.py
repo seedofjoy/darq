@@ -22,6 +22,7 @@ from .types import OnJobPrepublishType
 from .types import OnJobPrerunType
 from .utils import get_function_name
 
+CtxType = t.Dict[t.Any, t.Any]
 TD_1_DAY = datetime.timedelta(days=1)
 
 
@@ -44,8 +45,8 @@ class Darq:
             redis_settings: t.Optional[RedisSettings] = None,
             redis_pool: t.Optional[ArqRedis] = None,
             burst: bool = False,
-            on_startup: t.Callable[[JobCtx], t.Awaitable[None]] = None,
-            on_shutdown: t.Callable[[JobCtx], t.Awaitable[None]] = None,
+            on_startup: t.Callable[[CtxType], t.Awaitable[None]] = None,
+            on_shutdown: t.Callable[[CtxType], t.Awaitable[None]] = None,
             max_jobs: int = 10,
             job_timeout: SecondsTimedelta = 300,
             keep_result: SecondsTimedelta = 3600,

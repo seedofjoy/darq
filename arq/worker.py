@@ -13,6 +13,7 @@ from aioredis import MultiExecError
 from pydantic.utils import import_string
 
 from darq.cron import CronJob
+from darq.utils import poll
 from .connections import ArqRedis
 from .connections import create_pool
 from .connections import log_redis_info
@@ -31,7 +32,6 @@ from .jobs import serialize_result
 from .jobs import Serializer
 from .utils import args_to_string
 from .utils import ms_to_datetime
-from .utils import poll
 from .utils import SecondsTimedelta
 from .utils import timestamp_ms
 from .utils import to_ms
@@ -143,8 +143,7 @@ class Worker:
     """
     Main class for running jobs.
 
-    :param functions: list of functions to register, can either be raw coroutine
-                      functions or the result of :func:`arq.worker.func`.
+    :param app: instance of :func:`darq.app.Darq`
     :param queue_name: queue name to get jobs from
     :param cron_jobs: list of cron jobs to run, use :func:`arq.cron.cron` to
                       create them
@@ -174,7 +173,7 @@ class Worker:
 
     def __init__(
             self,
-            functions: t.Sequence[t.Union[Function, CoroutineType]] = (),
+            app: 'Darq',
             *,
             queue_name: str = default_queue_name,
             cron_jobs: t.Optional[t.Sequence[CronJob]] = None,
@@ -197,8 +196,9 @@ class Worker:
             job_serializer: t.Optional[Serializer] = None,
             job_deserializer: t.Optional[Deserializer] = None,
     ) -> None:
+        self.app = app
         self.functions: t.Dict[str, t.Union[Function, CronJob]] = {
-            f.name: f for f in map(func, functions)
+            f.name: f for f in map(func, app.registry.get_functions())
         }
         self.queue_name = queue_name
         self.cron_jobs: t.List[CronJob] = []
@@ -234,6 +234,8 @@ class Worker:
 
         self.tasks: t.List[asyncio.Task[t.Any]] = []
         self.main_task: t.Optional[asyncio.Task[None]] = None
+        self.graceful_shutdown_task: t.Optional[asyncio.Task[None]] = None
+        self.graceful_shutdown_timeout = 30
         self.loop = asyncio.get_event_loop()
         self.ctx = ctx or {}
         max_timeout = max(
@@ -310,10 +312,15 @@ class Worker:
         )
         await log_redis_info(self.pool, log.info)
         self.ctx['redis'] = self.pool
+        await self.app.connect(self.pool)
         if self.on_startup:
             await self.on_startup(self.ctx)
 
         async for _ in poll(self.poll_delay_s):
+            if self.graceful_shutdown_task:
+                self.clean_tasks_done()
+                continue
+
             await self._poll_iteration()
 
             if self.burst:
@@ -342,14 +349,15 @@ class Worker:
                 count=count, max=now,
             )
         await self.run_jobs(job_ids)
+        self.clean_tasks_done()
+        await self.heart_beat()
 
+    def clean_tasks_done(self):
         for task in self.tasks:
             if task.done():
                 self.tasks.remove(task)
                 # required to make sure errors in run_job get propagated
                 task.result()
-
-        await self.heart_beat()
 
     async def run_jobs(self, job_ids: t.Sequence[str]) -> None:
         for job_id in job_ids:
@@ -653,7 +661,7 @@ class Worker:
         if (now_ts - self._last_health_check) < self.health_check_interval:
             return
         self._last_health_check = now_ts
-        pending_tasks = sum(not task.done() for task in self.tasks)
+        pending_tasks = self.running_job_count()
         queued = await self.pool.zcard(self.queue_name)
         info = (
             f'{datetime.now():%b-%d %H:%M:%S} j_complete={self.jobs_complete} '
@@ -688,7 +696,22 @@ class Worker:
             + len(self.tasks)
         )
 
-    def handle_sig(self, signum: int) -> None:
+    def running_job_count(self):
+        return sum(not task.done() for task in self.tasks)
+
+    async def graceful_shutdown(self, signum: int) -> None:
+        running_job_count = self.running_job_count()
+        if running_job_count:
+            log.info(
+                'Warm shutdown. Awaiting for %d jobs with %d seconds timeout.',
+                running_job_count, self.graceful_shutdown_timeout,
+            )
+            async for _ in poll(0.1, timeout=self.graceful_shutdown_timeout):
+                if not self.running_job_count():
+                    break
+        self.shutdown(signum)
+
+    def shutdown(self, signum: int) -> None:
         sig = Signals(signum)
         log.info(
             'shutdown on %s ◆ %d jobs complete ◆ %d failed ◆ %d retries ◆ '
@@ -705,6 +728,15 @@ class Worker:
         self.main_task and self.main_task.cancel()
         self.on_stop and self.on_stop(sig)
 
+    def handle_sig(self, signum: int) -> None:
+        if self.graceful_shutdown_task:
+            self.graceful_shutdown_task.cancel()
+            self.shutdown(signum)
+        else:
+            self.graceful_shutdown_task = self.loop.create_task(
+                self.graceful_shutdown(signum),
+            )
+
     async def close(self) -> None:
         if not self.pool:
             return
@@ -712,6 +744,7 @@ class Worker:
         await self.pool.delete(self.health_check_key)
         if self.on_shutdown:
             await self.on_shutdown(self.ctx)
+        await self.app.disconnect()
         self.pool.close()
         await self.pool.wait_closed()
         self.pool = None  # type: ignore
@@ -720,7 +753,7 @@ class Worker:
         return (
             f'<Worker j_complete={self.jobs_complete} '
             f'j_failed={self.jobs_failed} j_retried={self.jobs_retried} '
-            f'j_ongoing={sum(not task.done() for task in self.tasks)}>'
+            f'j_ongoing={self.running_job_count()}>'
         )
 
 

@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import typing as t
 from datetime import datetime, timedelta, timezone
@@ -52,17 +51,6 @@ def to_seconds(td: Optional[SecondsTimedelta]) -> Optional[float]:
     if td is None:
         return td
     return to_seconds_strict(td)
-
-
-async def poll(step: float = 0.5):
-    loop = asyncio.get_event_loop()
-    start = loop.time()
-    while True:
-        before = loop.time()
-        yield before - start
-        after = loop.time()
-        wait = max([0, step - after + before])
-        await asyncio.sleep(wait)
 
 
 DEFAULT_CURTAIL = 80
