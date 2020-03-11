@@ -13,8 +13,6 @@ from aioredis import MultiExecError
 from pydantic.utils import import_string
 
 from darq.cron import CronJob
-from darq.types import OnJobPostrunType
-from darq.types import OnJobPrerunType
 from darq.utils import poll
 from .connections import ArqRedis
 from .connections import create_pool
@@ -147,15 +145,9 @@ class Worker:
 
     :param app: instance of :func:`darq.app.Darq`
     :param queue_name: queue name to get jobs from
-    :param cron_jobs: list of cron jobs to run, use :func:`arq.cron.cron` to
-                      create them
     :param redis_settings: settings for creating a redis connection
     :param redis_pool: existing redis pool, generally None
     :param burst: whether to stop the worker once all jobs have been run
-    :param on_startup: coroutine function to run at startup
-    :param on_shutdown: coroutine function to run at shutdown
-    :param on_job_prerun: coroutine function to run before job starts
-    :param on_job_postrun: coroutine function to run after job finish
     :param max_jobs: maximum number of jobs to run at a time
     :param job_timeout: default job timeout (max run time)
     :param keep_result: default duration to keep job results for
@@ -180,14 +172,9 @@ class Worker:
             app: 'Darq',
             *,
             queue_name: str = default_queue_name,
-            cron_jobs: t.Optional[t.Sequence[CronJob]] = None,
             redis_settings: t.Optional[RedisSettings] = None,
             redis_pool: ArqRedis = None,
             burst: bool = False,
-            on_startup: t.Callable[[CtxType], t.Awaitable[None]] = None,
-            on_shutdown: t.Callable[[CtxType], t.Awaitable[None]] = None,
-            on_job_prerun: t.Optional[OnJobPrerunType] = None,
-            on_job_postrun: t.Optional[OnJobPostrunType] = None,
             max_jobs: int = 10,
             job_timeout: SecondsTimedelta = 300,
             keep_result: SecondsTimedelta = 3600,
@@ -207,16 +194,16 @@ class Worker:
             dict(app.registry)
         self.queue_name = queue_name
         self.cron_jobs: t.List[CronJob] = []
-        if cron_jobs:
-            self.cron_jobs = list(cron_jobs)
+        if app.cron_jobs:
+            self.cron_jobs = list(app.cron_jobs)
             self.functions.update({cj.name: cj for cj in self.cron_jobs})
         assert len(self.functions) > 0, \
             'at least one function or cron_job must be registered'
         self.burst = burst
-        self.on_startup = on_startup
-        self.on_shutdown = on_shutdown
-        self.on_job_prerun = on_job_prerun
-        self.on_job_postrun = on_job_postrun
+        self.on_startup = app.on_startup
+        self.on_shutdown = app.on_shutdown
+        self.on_job_prerun = app.on_job_prerun
+        self.on_job_postrun = app.on_job_postrun
         self.sem = asyncio.BoundedSemaphore(max_jobs)
         self.job_timeout_s = to_seconds_strict(job_timeout)
         self.keep_result_s = to_seconds_strict(keep_result)

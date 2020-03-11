@@ -36,11 +36,6 @@ class Worker(ArqWorker):
             max_burst_jobs=app.max_burst_jobs,
             job_serializer=app.job_serializer,
             job_deserializer=app.job_deserializer,
-            cron_jobs=app.cron_jobs,
-            on_startup=app.on_startup,
-            on_shutdown=app.on_shutdown,
-            on_job_prerun=app.on_job_prerun,
-            on_job_postrun=app.on_job_postrun,
             **extra_kwargs,
         )
 
