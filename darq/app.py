@@ -1,5 +1,4 @@
 import datetime
-import functools
 import importlib
 import typing as t
 
@@ -16,7 +15,6 @@ from .registry import Registry
 from .types import AnyCallable
 from .types import AnyTimedelta
 from .types import DataDict
-from .types import JobCtx
 from .types import OnJobPostrunType
 from .types import OnJobPrepublishType
 from .types import OnJobPrerunType
@@ -110,40 +108,17 @@ class Darq:
         for pkg in packages:
             importlib.import_module(pkg)
 
-    def add_cron_jobs(self, *jobs: CronJob) -> None:
-        for job in jobs:
-            if not isinstance(job, CronJob):
-                raise DarqException(f'{job!r} must be instance of CronJob')
-            if job.coroutine not in self.registry.by_original_coro:
+    def add_cron_jobs(self, *cron_jobs: CronJob) -> None:
+        registered_coroutines = {f.coroutine for f in self.registry.values()}
+        for cj in cron_jobs:
+            if not isinstance(cj, CronJob):
+                raise DarqException(f'{cj!r} must be instance of CronJob')
+            if cj.coroutine not in registered_coroutines:
                 raise DarqException(
-                    f'{job.coroutine!r} is not registered. '
+                    f'{cj.coroutine!r} is not registered. '
                     'Please, wrap it with @task decorator.',
                 )
-            # Replace original coroutine with wrapped by ``wrap_job_coroutine``
-            arq_function = self.registry.by_original_coro[job.coroutine]
-            job.coroutine = arq_function.coroutine  # type: ignore
-            self.cron_jobs.append(job)
-
-    def wrap_job_coroutine(
-            self, function: t.Callable[..., t.Any],
-    ) -> t.Callable[..., t.Any]:
-
-        @functools.wraps(function)
-        async def wrapper(ctx: JobCtx, *args: t.Any, **kwargs: t.Any) -> t.Any:
-            arq_function = self.registry.by_original_coro[function]
-            ctx['metadata'] = kwargs.pop('__metadata__', {})
-            if self.on_job_prerun:
-                await self.on_job_prerun(ctx, arq_function, args, kwargs)
-
-            result = await function(*args, **kwargs)
-
-            if self.on_job_postrun:
-                await self.on_job_postrun(
-                    ctx, arq_function, args, kwargs, result,
-                )
-            return result
-
-        return wrapper
+            self.cron_jobs.append(cj)
 
     def task(
             self,
@@ -173,9 +148,8 @@ class Darq:
                     )
                 metadata: DataDict = {}
 
-                arq_function = self.registry.by_original_coro[function]
                 self.on_job_prepublish and await self.on_job_prepublish(
-                    metadata, arq_function, args, kwargs,
+                    metadata, self.registry[name], args, kwargs,
                 )
                 if metadata:
                     kwargs['__metadata__'] = metadata
@@ -183,7 +157,7 @@ class Darq:
 
             function.delay = delay  # type: ignore
             arq_function = arq.worker.func(
-                coroutine=self.wrap_job_coroutine(function), name=name,
+                coroutine=function, name=name,
                 keep_result=keep_result, timeout=timeout, max_tries=max_tries,
             )
             self.registry.add(arq_function)
