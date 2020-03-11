@@ -13,6 +13,8 @@ from aioredis import MultiExecError
 from pydantic.utils import import_string
 
 from darq.cron import CronJob
+from darq.types import OnJobPostrunType
+from darq.types import OnJobPrerunType
 from darq.utils import poll
 from .connections import ArqRedis
 from .connections import create_pool
@@ -152,6 +154,8 @@ class Worker:
     :param burst: whether to stop the worker once all jobs have been run
     :param on_startup: coroutine function to run at startup
     :param on_shutdown: coroutine function to run at shutdown
+    :param on_job_prerun: coroutine function to run before job starts
+    :param on_job_postrun: coroutine function to run after job finish
     :param max_jobs: maximum number of jobs to run at a time
     :param job_timeout: default job timeout (max run time)
     :param keep_result: default duration to keep job results for
@@ -182,6 +186,8 @@ class Worker:
             burst: bool = False,
             on_startup: t.Callable[[CtxType], t.Awaitable[None]] = None,
             on_shutdown: t.Callable[[CtxType], t.Awaitable[None]] = None,
+            on_job_prerun: t.Optional[OnJobPrerunType] = None,
+            on_job_postrun: t.Optional[OnJobPostrunType] = None,
             max_jobs: int = 10,
             job_timeout: SecondsTimedelta = 300,
             keep_result: SecondsTimedelta = 3600,
@@ -197,14 +203,11 @@ class Worker:
             job_deserializer: t.Optional[Deserializer] = None,
     ) -> None:
         self.app = app
-        self.functions: t.Dict[str, t.Union[Function, CronJob]] = {
-            f.name: f for f in map(func, app.registry.get_functions())
-        }
+        self.functions: t.Dict[str, t.Union[Function, CronJob]] = \
+            dict(app.registry)
         self.queue_name = queue_name
         self.cron_jobs: t.List[CronJob] = []
         if cron_jobs:
-            assert all(isinstance(cj, CronJob) for cj in cron_jobs), \
-                'cron_jobs, must be instances of CronJob'
             self.cron_jobs = list(cron_jobs)
             self.functions.update({cj.name: cj for cj in self.cron_jobs})
         assert len(self.functions) > 0, \
@@ -212,6 +215,8 @@ class Worker:
         self.burst = burst
         self.on_startup = on_startup
         self.on_shutdown = on_shutdown
+        self.on_job_prerun = on_job_prerun
+        self.on_job_postrun = on_job_postrun
         self.sem = asyncio.BoundedSemaphore(max_jobs)
         self.job_timeout_s = to_seconds_strict(job_timeout)
         self.keep_result_s = to_seconds_strict(keep_result)
@@ -352,7 +357,7 @@ class Worker:
         self.clean_tasks_done()
         await self.heart_beat()
 
-    def clean_tasks_done(self):
+    def clean_tasks_done(self) -> None:
         for task in self.tasks:
             if task.done():
                 self.tasks.remove(task)
@@ -497,6 +502,7 @@ class Worker:
             'job_try': job_try,
             'enqueue_time': ms_to_datetime(enqueue_time_ms),
             'score': score,
+            'metadata': kwargs.pop('__metadata__', {}),
         }
         ctx = {**self.ctx, **job_ctx}
         start_ms = timestamp_ms()
@@ -514,7 +520,15 @@ class Worker:
             # raise exceptions
             try:
                 async with async_timeout.timeout(timeout_s):
-                    result = await function.coroutine(ctx, *args, **kwargs)
+                    if self.on_job_prerun:
+                        await self.on_job_prerun(ctx, function, args, kwargs)
+
+                    result = await function.coroutine(*args, **kwargs)
+
+                    if self.on_job_postrun:
+                        await self.on_job_postrun(
+                            ctx, function, args, kwargs, result,
+                        )
             except Exception as e:
                 exc_extra = getattr(e, 'extra', None)
                 if callable(exc_extra):
@@ -696,7 +710,7 @@ class Worker:
             + len(self.tasks)
         )
 
-    def running_job_count(self):
+    def running_job_count(self) -> int:
         return sum(not task.done() for task in self.tasks)
 
     async def graceful_shutdown(self, signum: int) -> None:

@@ -118,7 +118,7 @@ async def test_task_parametrized(darq):
     arq_func = darq.registry.get(func_name)
     assert isinstance(arq_func, arq.worker.Function)
     assert arq_func.name == func_name
-    assert arq_func.coroutine.__wrapped__ == foobar_task
+    assert arq_func.coroutine == foobar_task
     assert arq_func.timeout_s == timeout
     assert arq_func.keep_result_s == keep_result
 
@@ -196,7 +196,7 @@ async def test_on_job_callbacks(
         function_name=function_name,
         result=result,
         args=func_args,
-        kwargs={'__metadata__': expected_metadata, **func_kwargs},
+        kwargs=func_kwargs,
     )
 
     on_job_prerun.assert_called_once()
@@ -207,7 +207,7 @@ async def test_on_job_callbacks(
     assert ctx['metadata'] == expected_metadata
     assert isinstance(call_args[1], arq.worker.Function)
     assert call_args[1].name == function_name
-    assert call_args[1].coroutine.__wrapped__ == foobar_task
+    assert call_args[1].coroutine == foobar_task
     assert call_args[2] == func_args
     assert call_args[3] == func_kwargs
 
@@ -219,7 +219,7 @@ async def test_on_job_callbacks(
     assert ctx['metadata'] == expected_metadata
     assert isinstance(call_args[1], arq.worker.Function)
     assert call_args[1].name == function_name
-    assert call_args[1].coroutine.__wrapped__ == foobar_task
+    assert call_args[1].coroutine == foobar_task
     assert call_args[2] == func_args
     assert call_args[3] == func_kwargs
     assert call_args[4] == result
