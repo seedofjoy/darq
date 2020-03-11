@@ -22,10 +22,10 @@ def test_settings_changed():
 
 
 async def test_redis_timeout(mocker):
-    mocker.spy(arq.utils.asyncio, 'sleep')
+    mocker.spy(arq.connections.asyncio, 'sleep')
     with pytest.raises(OSError):
         await create_pool(RedisSettings(port=0, conn_retry_delay=0))
-    assert arq.utils.asyncio.sleep.call_count == 5
+    assert arq.connections.asyncio.sleep.call_count == 5
 
 
 async def test_redis_sentinel_failure():

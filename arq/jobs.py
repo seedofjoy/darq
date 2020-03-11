@@ -6,8 +6,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
+from darq.utils import poll
+
 from .constants import default_queue_name, in_progress_key_prefix, job_key_prefix, result_key_prefix
-from .utils import ms_to_datetime, poll, timestamp_ms
+from .utils import ms_to_datetime, timestamp_ms
 
 logger = logging.getLogger('arq.jobs')
 

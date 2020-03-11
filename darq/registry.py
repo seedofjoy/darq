@@ -15,10 +15,10 @@ class Registry(BaseRegistry):
 
     def __init__(self) -> None:
         super().__init__()
-        self.by_original_coro: t.Dict[AnyCallable, arq.worker.Function] = {}
+        self.by_original_coro: t.Dict[AnyCallable, 'arq.worker.Function'] = {}
 
     def __setitem__(
-            self, arq_function_name: str, arq_function: arq.worker.Function,
+            self, arq_function_name: str, arq_function: 'arq.worker.Function',
     ) -> None:
         original_coroutine = t.cast(
             AnyCallable,
@@ -36,10 +36,10 @@ class Registry(BaseRegistry):
         del self.by_original_coro[original_coroutine]
         del self.data[arq_function_name]
 
-    def add(self, arq_function: arq.worker.Function) -> None:
+    def add(self, arq_function: 'arq.worker.Function') -> None:
         self[arq_function.name] = arq_function
 
-    def get_functions(self) -> t.Sequence[arq.worker.Function]:
+    def get_functions(self) -> t.Sequence['arq.worker.Function']:
         return tuple(self.values())
 
     def get_function_names(self) -> t.Sequence[str]:
