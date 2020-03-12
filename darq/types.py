@@ -8,7 +8,7 @@ else:
     from typing_extensions import TypedDict
 
 if t.TYPE_CHECKING:
-    import arq
+    import darq
     from darq.cron import CronJob  # noqa F401
 
 AnyCallable = t.Callable[..., t.Any]
@@ -18,11 +18,11 @@ DataDict = t.Dict[str, t.Any]
 ArgsType = t.Sequence[t.Any]
 KwargsType = t.Mapping[str, t.Any]
 
-FunctionOrCronJob = t.Union['arq.worker.Function', 'CronJob']
+FunctionOrCronJob = t.Union['darq.worker.Function', 'CronJob']
 
 
 class JobCtx(TypedDict):
-    redis: 'arq.ArqRedis'
+    redis: 'darq.connections.ArqRedis'
     job_id: str
     job_try: int
     enqueue_time: datetime.datetime

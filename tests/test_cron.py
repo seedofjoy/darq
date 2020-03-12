@@ -203,7 +203,7 @@ async def test_job_successful_on_specific_queue(darq, worker_factory, caplog):
     darq.add_cron_jobs(
         cron(foobar_task, hour=1, run_at_startup=True),
     )
-    worker = worker_factory(darq, queue='darq:test-cron-queue')
+    worker = worker_factory(darq, queue_name='darq:test-cron-queue')
     await worker.main()
     assert worker.jobs_complete == 1
     assert worker.jobs_failed == 0

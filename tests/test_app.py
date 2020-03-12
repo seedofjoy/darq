@@ -2,14 +2,14 @@ import datetime
 import logging
 import re
 
-import arq
 import pytest
-from arq.connections import ArqRedis
 from asynctest import CoroutineMock
 from asynctest import patch
 
 from darq import Darq
 from darq.app import DarqConnectionError
+from darq.connections import ArqRedis
+from darq.worker import Function
 from . import redis_settings
 
 
@@ -116,7 +116,7 @@ async def test_task_parametrized(darq):
     func_name = 'tests.test_app.foobar'
     assert len(darq.registry) == 1
     arq_func = darq.registry.get(func_name)
-    assert isinstance(arq_func, arq.worker.Function)
+    assert isinstance(arq_func, Function)
     assert arq_func.name == func_name
     assert arq_func.coroutine == foobar_task
     assert arq_func.timeout_s == timeout
@@ -156,7 +156,7 @@ async def test_on_job_callbacks(
 
     async def prepublish_side_effect(metadata, arq_function, args, kwargs):
         metadata.update(expected_metadata)
-        assert isinstance(arq_function, arq.worker.Function)
+        assert isinstance(arq_function, Function)
         assert args == func_args
         assert kwargs == {
             '_expires': datetime.timedelta(days=1),
@@ -205,7 +205,7 @@ async def test_on_job_callbacks(
     ctx = call_args[0]
     assert_is_ctx(ctx)
     assert ctx['metadata'] == expected_metadata
-    assert isinstance(call_args[1], arq.worker.Function)
+    assert isinstance(call_args[1], Function)
     assert call_args[1].name == function_name
     assert call_args[1].coroutine == foobar_task
     assert call_args[2] == func_args
@@ -217,7 +217,7 @@ async def test_on_job_callbacks(
     ctx = call_args[0]
     assert_is_ctx(ctx)
     assert ctx['metadata'] == expected_metadata
-    assert isinstance(call_args[1], arq.worker.Function)
+    assert isinstance(call_args[1], Function)
     assert call_args[1].name == function_name
     assert call_args[1].coroutine == foobar_task
     assert call_args[2] == func_args
@@ -249,7 +249,7 @@ async def test_on_job_callbacks(
         ),
     ],
 )
-@patch('arq.connections.ArqRedis.enqueue_job')
+@patch('darq.connections.ArqRedis.enqueue_job')
 async def test_enqueue_job_params(
         enqueue_job_patched,
         darq_kwargs, task_kwargs, delay_args, delay_kwargs, expected_kwargs,

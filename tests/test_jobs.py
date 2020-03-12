@@ -2,24 +2,25 @@ import asyncio
 import pickle
 
 import pytest
-from arq.constants import default_queue_name
-from arq.constants import in_progress_key_prefix
-from arq.constants import job_key_prefix
-from arq.constants import result_key_prefix
-from arq.jobs import DeserializationError
-from arq.jobs import deserialize_job_raw
-from arq.jobs import Job
-from arq.jobs import JobResult
-from arq.jobs import JobStatus
-from arq.jobs import serialize_result
 from pytest_toolbox.comparison import CloseToNow
+
+from darq.constants import default_queue_name
+from darq.constants import in_progress_key_prefix
+from darq.constants import job_key_prefix
+from darq.constants import result_key_prefix
+from darq.jobs import DeserializationError
+from darq.jobs import deserialize_job_raw
+from darq.jobs import Job
+from darq.jobs import JobResult
+from darq.jobs import JobStatus
+from darq.jobs import serialize_result
 
 
 async def test_job_in_progress(arq_redis):
     await arq_redis.set(in_progress_key_prefix + 'foobar', b'1')
     j = Job('foobar', arq_redis)
     assert JobStatus.in_progress == await j.status()
-    assert str(j) == '<arq job foobar>'
+    assert str(j) == '<darq job foobar>'
 
 
 async def test_unknown(arq_redis):
@@ -49,7 +50,7 @@ async def test_enqueue_job(
     )
     assert isinstance(j, Job)
     assert JobStatus.queued == await j.status()
-    worker = worker_factory(darq, queue=queue_name)
+    worker = worker_factory(darq, queue_name=queue_name)
     await worker.main()
     r = await j.result(pole_delay=0)
     assert r == 42

@@ -2,15 +2,14 @@ import datetime
 import importlib
 import typing as t
 
-import arq
-from arq.connections import ArqRedis
-from arq.connections import RedisSettings
-from arq.jobs import Deserializer
-from arq.jobs import Job
-from arq.jobs import Serializer
-from arq.utils import SecondsTimedelta
-
+from .connections import ArqRedis
+from .connections import create_pool
+from .connections import RedisSettings
+from .constants import default_queue_name
 from .cron import CronJob
+from .jobs import Deserializer
+from .jobs import Job
+from .jobs import Serializer
 from .registry import Registry
 from .types import AnyCallable
 from .types import AnyTimedelta
@@ -19,6 +18,9 @@ from .types import OnJobPostrunType
 from .types import OnJobPrepublishType
 from .types import OnJobPrerunType
 from .utils import get_function_name
+from .utils import SecondsTimedelta
+from .worker import func as worker_func
+from .worker import WorkerSettings
 
 CtxType = t.Dict[t.Any, t.Any]
 TD_1_DAY = datetime.timedelta(days=1)
@@ -40,6 +42,7 @@ class Darq:
     """
     Darq application.
 
+    :param queue_name: queue name to get jobs from
     :param redis_settings: settings for creating a redis connection
     :param redis_pool: existing redis pool, generally None
     :param burst: whether to stop the worker once all jobs have been run
@@ -74,6 +77,8 @@ class Darq:
 
     def __init__(
             self,
+            *,
+            queue_name: str = default_queue_name,
             redis_settings: t.Optional[RedisSettings] = None,
             redis_pool: t.Optional[ArqRedis] = None,
             burst: bool = False,
@@ -97,29 +102,24 @@ class Darq:
             job_deserializer: t.Optional[Deserializer] = None,
             default_job_expires: AnyTimedelta = TD_1_DAY,
     ) -> None:
-        self.redis_settings = redis_settings
+        self.worker_settings = WorkerSettings(
+            queue_name=default_queue_name, burst=burst, max_jobs=max_jobs,
+            job_timeout=job_timeout, keep_result=keep_result,
+            poll_delay=poll_delay, queue_read_limit=queue_read_limit,
+            max_tries=max_tries, health_check_interval=health_check_interval,
+            health_check_key=health_check_key, retry_jobs=retry_jobs,
+            max_burst_jobs=max_burst_jobs, job_serializer=job_serializer,
+            job_deserializer=job_deserializer,
+        )
         self.redis_pool = redis_pool
-        self.burst = burst
+        self.redis_settings = redis_settings
+        self.ctx = ctx
         self.on_startup = on_startup
         self.on_shutdown = on_shutdown
         self.on_job_prerun = on_job_prerun
         self.on_job_postrun = on_job_postrun
         self.on_job_prepublish = on_job_prepublish
-        self.max_jobs = max_jobs
-        self.job_timeout = job_timeout
-        self.keep_result = keep_result
-        self.poll_delay = poll_delay
-        self.queue_read_limit = queue_read_limit
-        self.max_tries = max_tries
-        self.health_check_interval = health_check_interval
-        self.health_check_key = health_check_key
-        self.ctx = ctx
-        self.retry_jobs = retry_jobs
-        self.max_burst_jobs = max_burst_jobs
-        self.job_serializer = job_serializer
-        self.job_deserializer = job_deserializer
         self.default_job_expires = default_job_expires
-
         self.cron_jobs: t.List[CronJob] = []
         self.registry = Registry()
 
@@ -127,9 +127,7 @@ class Darq:
         if self.redis_pool:
             return
 
-        self.redis_pool = (
-            redis_pool or await arq.create_pool(self.redis_settings)
-        )
+        self.redis_pool = redis_pool or await create_pool(self.redis_settings)
 
     async def disconnect(self) -> None:
         if not self.redis_pool:
@@ -194,7 +192,7 @@ class Darq:
                 return await self.redis_pool.enqueue_job(name, *args, **kwargs)
 
             function.delay = delay  # type: ignore
-            arq_function = arq.worker.func(
+            arq_function = worker_func(
                 coroutine=function, name=name,
                 keep_result=keep_result, timeout=timeout, max_tries=max_tries,
             )
