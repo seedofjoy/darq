@@ -6,12 +6,12 @@ import typing as t
 from signal import Signals
 
 import click
-from arq.logs import default_log_config
-from arq.worker import check_health
 from pydantic.utils import import_string
 
 from .app import Darq
+from .logs import default_log_config
 from .version import VERSION
+from .worker import check_health
 from .worker import create_worker
 from .worker import run_worker
 
@@ -50,18 +50,25 @@ def cli(
 
     logging.config.dictConfig(default_log_config(verbose))
 
+    overwrite_settings: t.Dict[str, t.Any] = {}
+    if queue is not None:
+        overwrite_settings['queue_name'] = queue
+
     if check:
         exit(check_health(darq, queue))
     else:
         if watch:
             loop = asyncio.get_event_loop()
-            loop.run_until_complete(watch_reload(watch, darq, queue, loop))
+            loop.run_until_complete(
+                watch_reload(watch, darq, loop, **overwrite_settings),
+            )
         else:
-            run_worker(darq, queue)
+            run_worker(darq, **overwrite_settings)
 
 
 async def watch_reload(
-        path: str, darq: Darq, queue: str, loop: asyncio.AbstractEventLoop,
+        path: str, darq: Darq, loop: asyncio.AbstractEventLoop,
+        **overwrite_settings: t.Dict[str, t.Any],
 ) -> None:
     try:
         from watchgod import awatch
@@ -71,7 +78,7 @@ async def watch_reload(
         ) from e
 
     stop_event = asyncio.Event()
-    worker = create_worker(darq, queue)
+    worker = create_worker(darq, **overwrite_settings)
 
     tasks: t.List[asyncio.Task[t.Any]] = []
 

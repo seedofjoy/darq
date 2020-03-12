@@ -2,12 +2,13 @@ import logging
 import re
 from datetime import timedelta
 
-import arq.utils
 import pytest
-from arq.connections import create_pool
-from arq.connections import log_redis_info
-from arq.connections import RedisSettings
 
+import darq
+from darq import utils
+from darq.connections import create_pool
+from darq.connections import log_redis_info
+from darq.connections import RedisSettings
 from . import redis_settings
 
 
@@ -22,10 +23,10 @@ def test_settings_changed():
 
 
 async def test_redis_timeout(mocker):
-    mocker.spy(arq.connections.asyncio, 'sleep')
+    mocker.spy(darq.connections.asyncio, 'sleep')
     with pytest.raises(OSError):
         await create_pool(RedisSettings(port=0, conn_retry_delay=0))
-    assert arq.connections.asyncio.sleep.call_count == 5
+    assert darq.connections.asyncio.sleep.call_count == 5
 
 
 async def test_redis_sentinel_failure():
@@ -75,13 +76,13 @@ async def test_redis_log():
 
 
 def test_truncate():
-    assert arq.utils.truncate('123456', 4) == '123…'
+    assert utils.truncate('123456', 4) == '123…'
 
 
 def test_args_to_string():
-    assert arq.utils.args_to_string((), {'d': 4}) == 'd=4'
-    assert arq.utils.args_to_string((1, 2, 3), {}) == '1, 2, 3'
-    assert arq.utils.args_to_string((1, 2, 3), {'d': 4}) == '1, 2, 3, d=4'
+    assert utils.args_to_string((), {'d': 4}) == 'd=4'
+    assert utils.args_to_string((1, 2, 3), {}) == '1, 2, 3'
+    assert utils.args_to_string((1, 2, 3), {'d': 4}) == '1, 2, 3, d=4'
 
 
 @pytest.mark.parametrize('input_,output', [
@@ -92,7 +93,7 @@ def test_args_to_string():
     (None, None),
 ])
 def test_to_ms(input_, output):
-    assert arq.utils.to_ms(input_) == output
+    assert utils.to_ms(input_) == output
 
 
 @pytest.mark.parametrize('input_,output', [
@@ -102,4 +103,4 @@ def test_to_ms(input_, output):
     (None, None),
 ])
 def test_to_seconds(input_, output):
-    assert arq.utils.to_seconds(input_) == output
+    assert utils.to_seconds(input_) == output

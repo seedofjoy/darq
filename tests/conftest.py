@@ -3,9 +3,9 @@ import functools
 import msgpack
 import pytest
 from aioredis import create_redis_pool
-from arq.connections import ArqRedis
 
 from darq import Darq
+from darq.connections import ArqRedis
 from darq.worker import create_worker
 from . import redis_settings
 
@@ -48,9 +48,9 @@ async def arq_redis_msgpack():
 async def worker_factory(arq_redis):
     worker_ = None
 
-    def create(darq, queue=None):
+    def create(darq, **overwrite_settings):
         nonlocal worker_
-        worker_ = create_worker(darq, queue=queue)
+        worker_ = create_worker(darq, **overwrite_settings)
         return worker_
 
     yield create

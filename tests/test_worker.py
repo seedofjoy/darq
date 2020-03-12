@@ -10,20 +10,20 @@ import msgpack
 import pytest
 from aiohttp.test_utils import loop_context
 from aioredis import create_redis_pool
-from arq.constants import default_queue_name
-from arq.constants import health_check_key_suffix
-from arq.constants import job_key_prefix
-from arq.jobs import Job
-from arq.jobs import JobStatus
-from arq.worker import async_check_health
-from arq.worker import check_health
-from arq.worker import FailedJobs
-from arq.worker import JobExecutionFailed
-from arq.worker import Retry
-from arq.worker import Worker
 
 from darq import Darq
+from darq.constants import default_queue_name
+from darq.constants import health_check_key_suffix
+from darq.constants import job_key_prefix
+from darq.jobs import Job
+from darq.jobs import JobStatus
+from darq.worker import async_check_health
+from darq.worker import check_health
+from darq.worker import FailedJobs
+from darq.worker import JobExecutionFailed
+from darq.worker import Retry
 from darq.worker import run_worker
+from darq.worker import Worker
 from . import redis_settings
 
 
@@ -114,13 +114,12 @@ async def test_handle_sig_hard(darq, caplog, worker_factory):
     )
 
 
-def test_no_jobs(arq_redis, loop):
-    darq = Darq(redis_settings, burst=True, poll_delay=0, queue_read_limit=10)
+def test_no_jobs(darq, arq_redis, loop):
     darq.task(foobar)
 
     loop.run_until_complete(arq_redis.enqueue_job('tests.test_worker.foobar'))
     with loop_context():
-        worker = run_worker(darq, queue=None)
+        worker = run_worker(darq)
     assert worker.jobs_complete == 1
     assert str(worker) == (
         '<Worker j_complete=1 j_failed=0 j_retried=0 j_ongoing=0>'
@@ -141,9 +140,9 @@ async def test_health_check_pass(arq_redis):
     assert 0 == await async_check_health(redis_settings)
 
 
-async def test_set_health_check_key(darq, arq_redis, worker_factory):
+async def test_set_health_check_key(arq_redis, worker_factory):
     darq = Darq(
-        redis_settings, burst=True, poll_delay=0,
+        redis_settings=redis_settings, burst=True, poll_delay=0,
         health_check_key='darq:test:health-check',
     )
     darq.task(foobar)
@@ -430,7 +429,8 @@ async def test_startup_shutdown(arq_redis, worker_factory):
         calls.append('shutdown')
 
     darq = Darq(
-        redis_settings, burst=True, on_startup=startup, on_shutdown=shutdown,
+        redis_settings=redis_settings, burst=True,
+        on_startup=startup, on_shutdown=shutdown,
     )
     darq.task(foobar)
 
@@ -501,7 +501,9 @@ async def test_unpickleable(darq, arq_redis, worker_factory, caplog):
 
 
 async def test_log_health_check(arq_redis, worker_factory, caplog):
-    darq = Darq(redis_settings, burst=True, health_check_interval=0)
+    darq = Darq(
+        redis_settings=redis_settings, burst=True, health_check_interval=0,
+    )
     darq.task(foobar)
     caplog.set_level(logging.INFO)
     await arq_redis.enqueue_job('tests.test_worker.foobar', _job_id='testing')
@@ -650,7 +652,7 @@ async def test_repeat_job_result(darq, arq_redis, worker_factory):
 
 
 async def test_queue_read_limit_equals_max_jobs(arq_redis, worker_factory):
-    darq = Darq(redis_settings, burst=True, max_jobs=2)
+    darq = Darq(redis_settings=redis_settings, burst=True, max_jobs=2)
     darq.task(foobar)
     for _ in range(4):
         await arq_redis.enqueue_job('tests.test_worker.foobar')
@@ -678,7 +680,10 @@ async def test_queue_read_limit_equals_max_jobs(arq_redis, worker_factory):
 
 
 async def test_custom_queue_read_limit(arq_redis, worker_factory):
-    darq = Darq(redis_settings, burst=True, max_jobs=4, queue_read_limit=2)
+    darq = Darq(
+        redis_settings=redis_settings, burst=True, max_jobs=4,
+        queue_read_limit=2,
+    )
     darq.task(foobar)
     for _ in range(4):
         await arq_redis.enqueue_job('tests.test_worker.foobar')
@@ -707,7 +712,7 @@ async def test_custom_queue_read_limit(arq_redis, worker_factory):
 
 async def test_custom_serializers(arq_redis_msgpack, worker_factory):
     darq = Darq(
-        redis_settings, burst=True,
+        redis_settings=redis_settings, burst=True,
         job_serializer=msgpack.packb,
         job_deserializer=functools.partial(msgpack.unpackb, raw=False),
     )
@@ -764,7 +769,7 @@ async def test_incompatible_serializers_1(
 
 async def test_incompatible_serializers_2(arq_redis, worker_factory):
     darq = Darq(
-        redis_settings, burst=True,
+        redis_settings=redis_settings, burst=True,
         job_serializer=msgpack.packb,
         job_deserializer=functools.partial(msgpack.unpackb, raw=False),
     )
@@ -846,9 +851,8 @@ async def test_non_burst(darq, arq_redis, worker_factory, caplog, loop):
 
 
 @pytest.mark.skip(reason='Not working')
-async def test_multi_exec(arq_redis, worker_factory, caplog):
-    caplog.set_level(logging.DEBUG, logger='arq.worker')
-    darq = Darq(redis_settings, burst=True, poll_delay=0)
+async def test_multi_exec(darq, arq_redis, worker_factory, caplog):
+    caplog.set_level(logging.DEBUG, logger='darq.worker')
     darq.task(foo)
     await arq_redis.enqueue_job(
         'tests.test_worker.foo_multi_exec', 1, _job_id='testing',

@@ -7,14 +7,17 @@ from random import shuffle
 from time import time
 
 import pytest
-from arq.constants import default_queue_name
-from arq.jobs import Job, JobDef, SerializationError
-from arq.utils import timestamp_ms
-from arq.worker import func
-from arq.worker import Retry
-from arq.worker import Worker
 from pytest_toolbox.comparison import AnyInt
 from pytest_toolbox.comparison import CloseToNow
+
+from darq.constants import default_queue_name
+from darq.jobs import Job
+from darq.jobs import JobDef
+from darq.jobs import SerializationError
+from darq.utils import timestamp_ms
+from darq.worker import func
+from darq.worker import Retry
+from darq.worker import Worker
 
 
 async def foobar():
@@ -39,8 +42,8 @@ async def test_enqueue_job_different_queues(darq, arq_redis, worker_factory):
     j2 = await arq_redis.enqueue_job(
         'tests.test_main.foobar', _queue_name='arq:queue2',
     )
-    worker1 = worker_factory(darq, queue='arq:queue1')
-    worker2 = worker_factory(darq, queue='arq:queue2')
+    worker1 = worker_factory(darq, queue_name='arq:queue1')
+    worker2 = worker_factory(darq, queue_name='arq:queue2')
 
     await worker1.main()
     await worker2.main()

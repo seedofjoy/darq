@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
 
-from arq.utils import SecondsTimedelta
-from arq.utils import to_seconds
 from pydantic.utils import import_string
 
+from .utils import SecondsTimedelta
+from .utils import to_seconds
 
 R = t.TypeVar('R')
 Coro = t.TypeVar('Coro', bound=t.Callable[..., t.Awaitable[R]])

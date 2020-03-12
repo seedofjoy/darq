@@ -4,14 +4,27 @@ import pickle
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, Optional
+from typing import Any
+from typing import Callable
+from typing import Dict
+from typing import Mapping
+from typing import Optional
+from typing import Sequence
+from typing import Tuple
+from typing import TYPE_CHECKING
 
-from darq.utils import poll
+from .constants import default_queue_name
+from .constants import in_progress_key_prefix
+from .constants import job_key_prefix
+from .constants import result_key_prefix
+from .utils import ms_to_datetime
+from .utils import poll
+from .utils import timestamp_ms
 
-from .constants import default_queue_name, in_progress_key_prefix, job_key_prefix, result_key_prefix
-from .utils import ms_to_datetime, timestamp_ms
+if TYPE_CHECKING:
+    from .connections import ArqRedis
 
-logger = logging.getLogger('arq.jobs')
+log = logging.getLogger('darq.jobs')
 
 Serializer = Callable[[Dict[str, Any]], bytes]
 Deserializer = Callable[[bytes], Dict[str, Any]]
@@ -37,8 +50,8 @@ class JobStatus(str, Enum):
 @dataclass
 class JobDef:
     function: str
-    args: tuple
-    kwargs: dict
+    args: Sequence[Any]
+    kwargs: Dict[str, Any]
     job_try: int
     enqueue_time: datetime
     score: Optional[int]
@@ -61,19 +74,25 @@ class Job:
     __slots__ = 'job_id', '_redis', '_queue_name', '_deserializer'
 
     def __init__(
-        self, job_id: str, redis, _queue_name: str = default_queue_name, _deserializer: Optional[Deserializer] = None
+            self, job_id: str, redis: 'ArqRedis',
+            _queue_name: str = default_queue_name,
+            _deserializer: Optional[Deserializer] = None,
     ):
         self.job_id = job_id
         self._redis = redis
         self._queue_name = _queue_name
         self._deserializer = _deserializer
 
-    async def result(self, timeout: Optional[float] = None, *, pole_delay: float = 0.5) -> Any:
+    async def result(
+            self, timeout: Optional[float] = None,
+            *, pole_delay: float = 0.5,
+    ) -> Any:
         """
-        Get the result of the job, including waiting if it's not yet available. If the job raised an exception,
-        it will be raised here.
+        Get the result of the job, including waiting if it's not yet available.
+        If the job raised an exception, it will be raised here.
 
-        :param timeout: maximum time to wait for the job result before raising ``TimeoutError``, will wait forever
+        :param timeout: maximum time to wait for the job result before raising
+                        ``TimeoutError``, will wait forever
         :param pole_delay: how often to poll redis for the job result
         """
         async for delay in poll(pole_delay):
@@ -91,25 +110,33 @@ class Job:
 
     async def info(self) -> Optional[JobDef]:
         """
-        All information on a job, including its result if it's available, does not wait for the result.
+        All information on a job, including its result if it's available,
+        does not wait for the result.
         """
-        info = await self.result_info()
+        info: Optional[JobDef] = await self.result_info()
         if not info:
-            v = await self._redis.get(job_key_prefix + self.job_id, encoding=None)
+            v = await self._redis.get(
+                job_key_prefix + self.job_id, encoding=None,
+            )
             if v:
                 info = deserialize_job(v, deserializer=self._deserializer)
         if info:
-            info.score = await self._redis.zscore(self._queue_name, self.job_id)
+            info.score = await self._redis.zscore(
+                self._queue_name, self.job_id,
+            )
         return info
 
     async def result_info(self) -> Optional[JobResult]:
         """
-        Information about the job result if available, does not wait for the result. Does not raise an exception
-        even if the job raised one.
+        Information about the job result if available, does not wait for the
+        result. Does not raise an exception even if the job raised one.
         """
-        v = await self._redis.get(result_key_prefix + self.job_id, encoding=None)
+        v = await self._redis.get(
+            result_key_prefix + self.job_id, encoding=None,
+        )
         if v:
             return deserialize_result(v, deserializer=self._deserializer)
+        return None
 
     async def status(self) -> JobStatus:
         """
@@ -123,10 +150,14 @@ class Job:
             score = await self._redis.zscore(self._queue_name, self.job_id)
             if not score:
                 return JobStatus.not_found
-            return JobStatus.deferred if score > timestamp_ms() else JobStatus.queued
+            return (
+                JobStatus.deferred
+                if score > timestamp_ms()
+                else JobStatus.queued
+            )
 
-    def __repr__(self):
-        return f'<arq job {self.job_id}>'
+    def __repr__(self) -> str:
+        return f'<darq job {self.job_id}>'
 
 
 class SerializationError(RuntimeError):
@@ -139,26 +170,31 @@ class DeserializationError(SerializationError):
 
 def serialize_job(
     function_name: str,
-    args: tuple,
-    kwargs: dict,
-    job_try: int,
+    args: Sequence[Any],
+    kwargs: Mapping[str, Any],
+    job_try: Optional[int],
     enqueue_time_ms: int,
     *,
     serializer: Optional[Serializer] = None,
 ) -> Optional[bytes]:
-    data = {'t': job_try, 'f': function_name, 'a': args, 'k': kwargs, 'et': enqueue_time_ms}
+    data = {
+        't': job_try, 'f': function_name, 'a': args, 'k': kwargs,
+        'et': enqueue_time_ms,
+    }
     if serializer is None:
         serializer = pickle.dumps
     try:
         return serializer(data)
     except Exception as e:
-        raise SerializationError(f'unable to serialize job "{function_name}"') from e
+        raise SerializationError(
+            f'unable to serialize job "{function_name}"',
+        ) from e
 
 
 def serialize_result(
     function: str,
-    args: tuple,
-    kwargs: dict,
+    args: Sequence[Any],
+    kwargs: Dict[str, Any],
     job_try: int,
     enqueue_time_ms: int,
     success: bool,
@@ -185,17 +221,23 @@ def serialize_result(
     try:
         return serializer(data)
     except Exception:
-        logger.warning('error serializing result of %s', ref, exc_info=True)
+        log.warning('error serializing result of %s', ref, exc_info=True)
 
     # use string in case serialization fails again
     data.update(r='unable to serialize result', s=False)
     try:
         return serializer(data)
     except Exception:
-        logger.critical('error serializing result of %s even after replacing result', ref, exc_info=True)
+        log.critical(
+            'error serializing result of %s even after replacing result',
+            ref, exc_info=True,
+        )
+    return None
 
 
-def deserialize_job(r: bytes, *, deserializer: Optional[Deserializer] = None) -> JobDef:
+def deserialize_job(
+        r: bytes, *, deserializer: Optional[Deserializer] = None,
+) -> JobDef:
     if deserializer is None:
         deserializer = pickle.loads
     try:
@@ -212,7 +254,9 @@ def deserialize_job(r: bytes, *, deserializer: Optional[Deserializer] = None) ->
         raise DeserializationError('unable to deserialize job') from e
 
 
-def deserialize_job_raw(r: bytes, *, deserializer: Optional[Deserializer] = None) -> tuple:
+def deserialize_job_raw(
+        r: bytes, *, deserializer: Optional[Deserializer] = None,
+) -> Tuple[str, Sequence[Any], Dict[str, Any], Optional[int], int]:
     if deserializer is None:
         deserializer = pickle.loads
     try:
@@ -222,7 +266,9 @@ def deserialize_job_raw(r: bytes, *, deserializer: Optional[Deserializer] = None
         raise DeserializationError('unable to deserialize job') from e
 
 
-def deserialize_result(r: bytes, *, deserializer: Optional[Deserializer] = None) -> JobResult:
+def deserialize_result(
+        r: bytes, *, deserializer: Optional[Deserializer] = None,
+) -> JobResult:
     if deserializer is None:
         deserializer = pickle.loads
     try:
