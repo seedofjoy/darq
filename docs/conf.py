@@ -22,6 +22,7 @@ release = f'v{VERSION}'
 
 
 # -- General configuration ---------------------------------------------------
+master_doc = 'index'
 extensions = [
     'sphinx.ext.autodoc',
 ]
