@@ -1,1 +1,2 @@
 -r tests/requirements.txt
+-r docs/requirements.txt
