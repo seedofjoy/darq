@@ -11,8 +11,8 @@ def readfile(filename: str) -> str:
 
 
 long_description = '\n\n'.join((
-    readfile('README.md'),
-    readfile('CHANGES.md'),
+    readfile('README.rst'),
+    readfile('CHANGES.rst'),
 ))
 
 setuptools.setup(
@@ -22,7 +22,7 @@ setuptools.setup(
     author_email='igor.mozharovsky@gmail.com',
     description='A small wrapper around arq',
     long_description=long_description,
-    long_description_content_type='text/markdown',
+    long_description_content_type='text/x-rst',
     url='https://github.com/seedofjoy/darq',
     packages=['darq'],
     package_data={'darq': ['py.typed']},
