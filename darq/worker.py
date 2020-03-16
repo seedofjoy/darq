@@ -658,7 +658,8 @@ class Worker:
                     else None
                 )
                 job_futures.add(self.pool.enqueue_job(
-                    cron_job.name, _job_id=job_id, _queue_name=self.queue_name,
+                    cron_job.name, [], {},
+                    job_id=job_id, queue_name=self.queue_name,
                 ))
                 cron_job.set_next(n)
 

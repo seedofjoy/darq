@@ -3,9 +3,10 @@
 Changelog
 ---------
 
-0.7.0 (2020.03-09)
+0.7.0 (unpublished) (2020.03-09)
 ..................
 * Fork ``arq`` to project and merge it with ``darq`` (It was easier to rewrite ``arq`` than to write a wrapper)
+* **Breaking change**: Remove "magic" params from ``.delay``. For enqueue job with special params added ``.apply_async``.
 * Add ``watch``-mode to CLI.
 
 0.6.0 (2020-03-08)

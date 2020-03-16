@@ -9,7 +9,9 @@ from ssl import SSLContext
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Mapping
 from typing import Optional
+from typing import Sequence
 from typing import Tuple
 from typing import Union
 from uuid import uuid4
@@ -93,39 +95,42 @@ class ArqRedis(Redis):
     async def enqueue_job(
         self,
         function: str,
-        *args: Any,
-        _job_id: Optional[str] = None,
-        _queue_name: str = default_queue_name,
-        _defer_until: Optional[datetime] = None,
-        _defer_by: Union[None, int, float, timedelta] = None,
-        _expires: Union[None, int, float, timedelta] = None,
-        _job_try: Optional[int] = None,
-        **kwargs: Dict[str, Any],
+        args: Sequence[Any],
+        kwargs: Mapping[str, Any],
+        *,
+        job_id: Optional[str] = None,
+        queue_name: Optional[str] = None,
+        defer_until: Optional[datetime] = None,
+        defer_by: Union[None, int, float, timedelta] = None,
+        expires: Union[None, int, float, timedelta] = None,
+        job_try: Optional[int] = None,
     ) -> Optional[Job]:
         """
         Enqueue a job.
 
         :param function: Name of the function to call
         :param args: args to pass to the function
-        :param _job_id: ID of the job, can be used to enforce job uniqueness
-        :param _queue_name: queue of the job, can be used to create job in
-                            different queue
-        :param _defer_until: datetime at which to run the job
-        :param _defer_by: duration to wait before running the job
-        :param _expires: if the job still hasn't started after this duration,
-                         do not run it
-        :param _job_try: useful when re-enqueueing jobs within a job
-        :param kwargs: any keyword arguments to pass to the function
+        :param kwargs: kwargs to pass to the function
+        :param job_id: ID of the job, can be used to enforce job uniqueness
+        :param queue_name: queue of the job, can be used to create job in
+                           different queue
+        :param defer_until: datetime at which to run the job
+        :param defer_by: duration to wait before running the job
+        :param expires: if the job still hasn't started after this duration,
+                        do not run it
+        :param job_try: useful when re-enqueueing jobs within a job
         :return: :class:`darq.jobs.Job` instance or ``None`` if a job with this
                  ID already exists
         """
-        job_id = _job_id or uuid4().hex
+        job_id = job_id or uuid4().hex
         job_key = job_key_prefix + job_id
-        assert not (_defer_until and _defer_by), \
+        queue_name = queue_name or default_queue_name
+
+        assert not (defer_until and defer_by), \
             "use either 'defer_until' or 'defer_by' or neither, not both"
 
-        defer_by_ms = to_ms(_defer_by)
-        expires_ms = to_ms(_expires)
+        defer_by_ms = to_ms(defer_by)
+        expires_ms = to_ms(expires)
 
         with await self as conn:
             pipe = conn.pipeline()
@@ -138,8 +143,8 @@ class ArqRedis(Redis):
                 return None
 
             enqueue_time_ms = timestamp_ms()
-            if _defer_until is not None:
-                score = to_unix_ms(_defer_until)
+            if defer_until is not None:
+                score = to_unix_ms(defer_until)
             elif defer_by_ms:
                 score = enqueue_time_ms + defer_by_ms
             else:
@@ -150,12 +155,12 @@ class ArqRedis(Redis):
             )
 
             job = serialize_job(
-                function, args, kwargs, _job_try, enqueue_time_ms,
+                function, args, kwargs, job_try, enqueue_time_ms,
                 serializer=self.job_serializer,
             )
             tr = conn.multi_exec()
             tr.psetex(job_key, expires_ms, job)
-            tr.zadd(_queue_name, score, job_id)
+            tr.zadd(queue_name, score, job_id)
             try:
                 await tr.execute()
             except MultiExecError:
@@ -165,7 +170,7 @@ class ArqRedis(Redis):
                 await asyncio.gather(*tr._results, return_exceptions=True)
                 return None
         return Job(
-            job_id, redis=self, _queue_name=_queue_name,
+            job_id, redis=self, _queue_name=queue_name,
             _deserializer=self.job_deserializer,
         )
 

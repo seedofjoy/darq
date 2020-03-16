@@ -26,7 +26,7 @@ async def foobar():
 
 async def test_enqueue_job(darq, arq_redis, worker_factory):
     darq.task(foobar)
-    j = await arq_redis.enqueue_job('tests.test_main.foobar')
+    j = await arq_redis.enqueue_job('tests.test_main.foobar', [], {})
     worker: Worker = worker_factory(darq)
     await worker.main()
     r = await j.result(pole_delay=0)
@@ -37,10 +37,10 @@ async def test_enqueue_job_different_queues(darq, arq_redis, worker_factory):
     darq.task(foobar)
 
     j1 = await arq_redis.enqueue_job(
-        'tests.test_main.foobar', _queue_name='arq:queue1',
+        'tests.test_main.foobar', [], {}, queue_name='arq:queue1',
     )
     j2 = await arq_redis.enqueue_job(
-        'tests.test_main.foobar', _queue_name='arq:queue2',
+        'tests.test_main.foobar', [], {}, queue_name='arq:queue2',
     )
     worker1 = worker_factory(darq, queue_name='arq:queue1')
     worker2 = worker_factory(darq, queue_name='arq:queue2')
@@ -58,8 +58,10 @@ async def foobar_error():
 
 
 async def test_job_error(darq, arq_redis, worker_factory):
-    darq.task(foobar_error)
-    j = await arq_redis.enqueue_job('tests.test_main.foobar_error')
+    foobar_error_task = darq.task(foobar_error)
+    await darq.connect()
+
+    j = await foobar_error_task.delay()
     worker = worker_factory(darq)
     await worker.main()
 
@@ -69,26 +71,26 @@ async def test_job_error(darq, arq_redis, worker_factory):
 
 async def test_job_info(arq_redis):
     t_before = time()
-    j = await arq_redis.enqueue_job('foobar', 123, a=456)
+    j = await arq_redis.enqueue_job('foobar', [123], {'a': 456})
     info = await j.info()
     assert info.enqueue_time == CloseToNow()
     assert info.job_try is None
     assert info.function == 'foobar'
-    assert info.args == (123,)
+    assert info.args == [123]
     assert info.kwargs == {'a': 456}
     assert abs(t_before * 1000 - info.score) < 1000
 
 
 async def test_repeat_job(arq_redis):
-    j1 = await arq_redis.enqueue_job('foobar', _job_id='job_id')
+    j1 = await arq_redis.enqueue_job('foobar', [], {}, job_id='job_id')
     assert isinstance(j1, Job)
-    j2 = await arq_redis.enqueue_job('foobar', _job_id='job_id')
+    j2 = await arq_redis.enqueue_job('foobar', [], {}, job_id='job_id')
     assert j2 is None
 
 
 async def test_defer_until(arq_redis):
     j1 = await arq_redis.enqueue_job(
-        'foobar', _job_id='job_id', _defer_until=datetime(2032, 1, 1),
+        'foobar', [], {}, job_id='job_id', defer_until=datetime(2032, 1, 1),
     )
     assert isinstance(j1, Job)
     score = await arq_redis.zscore(default_queue_name, 'job_id')
@@ -96,7 +98,9 @@ async def test_defer_until(arq_redis):
 
 
 async def test_defer_by(arq_redis):
-    j1 = await arq_redis.enqueue_job('foobar', _job_id='job_id', _defer_by=20)
+    j1 = await arq_redis.enqueue_job(
+        'foobar', [], {}, job_id='job_id', defer_by=20,
+    )
     assert isinstance(j1, Job)
     score = await arq_redis.zscore(default_queue_name, 'job_id')
     ts = timestamp_ms()
@@ -120,10 +124,10 @@ async def test_mung(darq, arq_redis, worker_factory):
     for i in range(50):
         tasks.extend([
             arq_redis.enqueue_job(
-                'tests.test_main.count', counter, i, _job_id=f'v-{i}',
+                'tests.test_main.count', args=[counter, i], job_id=f'v-{i}',
             ),
             arq_redis.enqueue_job(
-                'tests.test_main.count', counter, i, _job_id=f'v-{i}',
+                'tests.test_main.count', args=[counter, i], job_id=f'v-{i}',
             ),
         ])
     shuffle(tasks)
@@ -145,7 +149,7 @@ async def test_custom_try(arq_redis, worker_factory):
     r = await j1.result(pole_delay=0)
     assert r == 1
 
-    j2 = await arq_redis.enqueue_job('foobar', _job_try=3)
+    j2 = await arq_redis.enqueue_job('foobar', job_try=3)
     await w.main()
     r = await j2.result(pole_delay=0)
     assert r == 3
@@ -158,7 +162,7 @@ async def test_custom_try2(arq_redis, worker_factory):
             raise Retry()
         return ctx['job_try']
 
-    j1 = await arq_redis.enqueue_job('foobar', _job_try=3)
+    j1 = await arq_redis.enqueue_job('foobar', job_try=3)
     w = worker_factory(functions=[func(foobar, name='foobar')])
     await w.main()
     r = await j1.result(pole_delay=0)
@@ -178,7 +182,7 @@ async def test_cant_pickle_arg(arq_redis, worker_factory):
     with pytest.raises(
             SerializationError, match='unable to serialize job "foobar"',
     ):
-        await arq_redis.enqueue_job('foobar', DoesntPickleClass())
+        await arq_redis.enqueue_job('foobar', [DoesntPickleClass()], {})
 
 
 async def doesnt_pickle():
@@ -188,7 +192,7 @@ async def doesnt_pickle():
 async def test_cant_pickle_result(darq, arq_redis, worker_factory):
     darq.task(doesnt_pickle)
 
-    j1 = await arq_redis.enqueue_job('tests.test_main.doesnt_pickle')
+    j1 = await arq_redis.enqueue_job('tests.test_main.doesnt_pickle', [], {})
     w = worker_factory(darq)
     await w.main()
     with pytest.raises(SerializationError, match='unable to serialize result'):
@@ -196,16 +200,16 @@ async def test_cant_pickle_result(darq, arq_redis, worker_factory):
 
 
 async def test_get_jobs(arq_redis):
-    await arq_redis.enqueue_job('foobar', a=1, b=2, c=3)
+    await arq_redis.enqueue_job('foobar', [], dict(a=1, b=2, c=3))
     await asyncio.sleep(0.01)
-    await arq_redis.enqueue_job('second', 4, b=5, c=6)
+    await arq_redis.enqueue_job('second', [4], dict(b=5, c=6))
     await asyncio.sleep(0.01)
-    await arq_redis.enqueue_job('third', 7, b=8)
+    await arq_redis.enqueue_job('third', [7], dict(b=8))
     jobs = await arq_redis.queued_jobs()
     assert [dataclasses.asdict(j) for j in jobs] == [
         {
             'function': 'foobar',
-            'args': (),
+            'args': [],
             'kwargs': {'a': 1, 'b': 2, 'c': 3},
             'job_try': None,
             'enqueue_time': CloseToNow(),
@@ -213,7 +217,7 @@ async def test_get_jobs(arq_redis):
         },
         {
             'function': 'second',
-            'args': (4,),
+            'args': [4],
             'kwargs': {'b': 5, 'c': 6},
             'job_try': None,
             'enqueue_time': CloseToNow(),
@@ -221,7 +225,7 @@ async def test_get_jobs(arq_redis):
         },
         {
             'function': 'third',
-            'args': (7,),
+            'args': [7],
             'kwargs': {'b': 8},
             'job_try': None,
             'enqueue_time': CloseToNow(),
@@ -237,7 +241,7 @@ async def test_get_jobs(arq_redis):
 async def test_enqueue_multiple(arq_redis, caplog):
     caplog.set_level(logging.DEBUG)
     results = await asyncio.gather(*[
-        arq_redis.enqueue_job('foobar', i, _job_id='testing')
+        arq_redis.enqueue_job('foobar', [i], {}, job_id='testing')
         for i in range(10)
     ])
     assert sum(r is not None for r in results) == 1
