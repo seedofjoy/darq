@@ -46,7 +46,7 @@ async def test_enqueue_job(
     darq.task(foobar)
 
     j = await arq_redis.enqueue_job(
-        'tests.test_jobs.foobar', 1, 2, c=3, _queue_name=queue_name,
+        'tests.test_jobs.foobar', [1, 2], {'c': 3}, queue_name=queue_name,
     )
     assert isinstance(j, Job)
     assert JobStatus.queued == await j.status()
@@ -59,7 +59,7 @@ async def test_enqueue_job(
     assert info == JobResult(
         job_try=1,
         function='tests.test_jobs.foobar',
-        args=(1, 2),
+        args=[1, 2],
         kwargs={'c': 3},
         enqueue_time=CloseToNow(),
         success=True,
@@ -72,7 +72,7 @@ async def test_enqueue_job(
     assert results == [
         JobResult(
             function='tests.test_jobs.foobar',
-            args=(1, 2),
+            args=[1, 2],
             kwargs={'c': 3},
             job_try=1,
             enqueue_time=CloseToNow(),
@@ -134,14 +134,14 @@ async def foobar_sum(a, b):
 async def test_deserialize_result(darq, arq_redis, worker_factory):
     darq.task(foobar_sum)
 
-    j = await arq_redis.enqueue_job('tests.test_jobs.foobar_sum', 1, 2)
+    j = await arq_redis.enqueue_job('tests.test_jobs.foobar_sum', [1, 2], {})
     assert JobStatus.queued == await j.status()
     worker = worker_factory(darq)
     await worker.run_check()
     assert await j.result(pole_delay=0) == 3
     assert await j.result(pole_delay=0) == 3
     info = await j.info()
-    assert info.args == (1, 2)
+    assert info.args == [1, 2]
     await arq_redis.set(result_key_prefix + j.job_id, b'invalid pickle data')
     with pytest.raises(
             DeserializationError, match='unable to deserialize job result',
@@ -150,7 +150,7 @@ async def test_deserialize_result(darq, arq_redis, worker_factory):
 
 
 async def test_deserialize_info(arq_redis):
-    j = await arq_redis.enqueue_job('foobar', 1, 2)
+    j = await arq_redis.enqueue_job('foobar', [1, 2], {})
     assert JobStatus.queued == await j.status()
     await arq_redis.set(job_key_prefix + j.job_id, b'invalid pickle data')
 

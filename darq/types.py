@@ -30,6 +30,15 @@ class JobCtx(TypedDict):
     metadata: DataDict
 
 
+class JobEnqueueOptions(TypedDict):
+    job_id: t.Optional[str]
+    queue_name: t.Optional[str]
+    defer_until: t.Optional[datetime.datetime]
+    defer_by: t.Optional[AnyTimedelta]
+    expires: t.Optional[AnyTimedelta]
+    job_try: t.Optional[int]
+
+
 OnJobPrerunType = t.Callable[
     [AnyDict, FunctionOrCronJob, ArgsType, KwargsType],
     t.Awaitable[None],
@@ -39,6 +48,6 @@ OnJobPostrunType = t.Callable[
     t.Awaitable[None],
 ]
 OnJobPrepublishType = t.Callable[
-    [DataDict, FunctionOrCronJob, ArgsType, KwargsType],
+    [DataDict, FunctionOrCronJob, ArgsType, KwargsType, JobEnqueueOptions],
     t.Awaitable[None],
 ]

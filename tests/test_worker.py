@@ -23,7 +23,6 @@ from darq.worker import FailedJobs
 from darq.worker import JobExecutionFailed
 from darq.worker import Retry
 from darq.worker import run_worker
-from darq.worker import Worker
 from . import redis_settings
 
 
@@ -117,7 +116,9 @@ async def test_handle_sig_hard(darq, caplog, worker_factory):
 def test_no_jobs(darq, arq_redis, loop):
     darq.task(foobar)
 
-    loop.run_until_complete(arq_redis.enqueue_job('tests.test_worker.foobar'))
+    loop.run_until_complete(
+        arq_redis.enqueue_job('tests.test_worker.foobar', [], {}),
+    )
     with loop_context():
         worker = run_worker(darq)
     assert worker.jobs_complete == 1
@@ -146,7 +147,9 @@ async def test_set_health_check_key(arq_redis, worker_factory):
         health_check_key='darq:test:health-check',
     )
     darq.task(foobar)
-    await arq_redis.enqueue_job('tests.test_worker.foobar', _job_id='testing')
+    await arq_redis.enqueue_job(
+        'tests.test_worker.foobar', [], {}, job_id='testing',
+    )
     worker = worker_factory(darq)
     await worker.main()
     assert sorted(await arq_redis.keys('*')) == [
@@ -156,9 +159,11 @@ async def test_set_health_check_key(arq_redis, worker_factory):
 
 
 async def test_job_successful(darq, arq_redis, worker_factory, caplog):
-    darq.task(foobar)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job('tests.test_worker.foobar', _job_id='testing')
+    foobar_task = darq.task(foobar)
+    await darq.connect()
+
+    await foobar_task.apply_async([], {}, job_id='testing')
     worker = worker_factory(darq)
     assert worker.jobs_complete == 0
     assert worker.jobs_failed == 0
@@ -203,12 +208,12 @@ async def test_job_retry(darq, arq_redis, worker_factory, caplog):
 
 
 async def test_job_retry_dont_retry(darq, arq_redis, worker_factory, caplog):
-    darq.task(retry)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job(
-        'tests.test_worker.retry', defer=0.01, _job_id='testing',
-    )
-    worker: Worker = worker_factory(darq)
+    retry_task = darq.task(retry)
+    await darq.connect()
+
+    await retry_task.apply_async([], {'defer': 0.01}, job_id='testing')
+    worker = worker_factory(darq)
     with pytest.raises(FailedJobs) as exc_info:
         await worker.run_check(retry_jobs=False)
     assert str(exc_info.value) == '1 job failed <Retry defer 0.01s>'
@@ -221,11 +226,11 @@ async def test_job_retry_dont_retry(darq, arq_redis, worker_factory, caplog):
 
 
 async def test_job_retry_max_jobs(darq, arq_redis, worker_factory, caplog):
-    darq.task(retry)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job(
-        'tests.test_worker.retry', defer=0.01, _job_id='testing',
-    )
+    retry_task = darq.task(retry)
+    await darq.connect()
+
+    await retry_task.apply_async([], {'defer': 0.01}, job_id='testing')
     worker = worker_factory(darq)
     assert await worker.run_check(max_burst_jobs=1) == 0
     assert worker.jobs_complete == 0
@@ -240,9 +245,11 @@ async def test_job_retry_max_jobs(darq, arq_redis, worker_factory, caplog):
 
 
 async def test_job_job_not_found(darq, arq_redis, worker_factory, caplog):
-    darq.task(foobar)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job('missing', _job_id='testing')
+    darq.task(foobar)
+    await darq.connect()
+
+    await arq_redis.enqueue_job('missing', [], {}, job_id='testing')
     worker = worker_factory(darq)
     await worker.main()
     assert worker.jobs_complete == 0
@@ -261,7 +268,7 @@ async def test_job_job_not_found_run_check(
 ):
     darq.task(foobar)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job('missing', _job_id='testing')
+    await arq_redis.enqueue_job('missing', [], {}, job_id='testing')
     worker = worker_factory(darq)
     with pytest.raises(FailedJobs) as exc_info:
         await worker.run_check()
@@ -274,9 +281,11 @@ async def test_job_job_not_found_run_check(
 
 
 async def test_retry_lots(darq, arq_redis, worker_factory, caplog):
-    darq.task(retry)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job('tests.test_worker.retry', _job_id='testing')
+    retry_task = darq.task(retry)
+    await darq.connect()
+
+    await retry_task.apply_async([], {}, job_id='testing')
     worker = worker_factory(darq)
     await worker.main()
     assert worker.jobs_complete == 0
@@ -294,16 +303,19 @@ async def test_retry_lots(darq, arq_redis, worker_factory, caplog):
 
 
 async def test_retry_lots_without_keep_result(darq, arq_redis, worker_factory):
-    darq.task(retry, keep_result=0)
-    await arq_redis.enqueue_job('tests.test_worker.retry', _job_id='testing')
+    retry_task = darq.task(retry, keep_result=0)
+    await darq.connect()
+    await retry_task.apply_async([], {}, job_id='testing')
     worker = worker_factory(darq)
     await worker.main()  # Should not raise MultiExecError
 
 
 async def test_retry_lots_check(darq, arq_redis, worker_factory, caplog):
-    darq.task(retry)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job('tests.test_worker.retry', _job_id='testing')
+    retry_task = darq.task(retry)
+    await darq.connect()
+
+    await retry_task.apply_async([], {}, job_id='testing')
     worker = worker_factory(darq)
     with pytest.raises(FailedJobs, match='max 5 retries exceeded'):
         await worker.run_check()
@@ -331,9 +343,11 @@ async def test_cancel_error(darq, arq_redis, worker_factory, caplog):
 
 
 async def test_job_expired(darq, arq_redis, worker_factory, caplog):
-    darq.task(foobar)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job('tests.test_worker.foobar', _job_id='testing')
+    foobar_task = darq.task(foobar)
+    await darq.connect()
+
+    await foobar_task.apply_async([], {}, job_id='testing')
     await arq_redis.delete(job_key_prefix + 'testing')
     worker = worker_factory(darq)
     assert worker.jobs_complete == 0
@@ -352,9 +366,11 @@ async def test_job_expired(darq, arq_redis, worker_factory, caplog):
 
 
 async def test_job_expired_run_check(darq, arq_redis, worker_factory, caplog):
-    darq.task(foobar)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job('tests.test_worker.foobar', _job_id='testing')
+    darq_task = darq.task(foobar)
+    await darq.connect()
+
+    await darq_task.apply_async([], {}, job_id='testing')
     await arq_redis.delete(job_key_prefix + 'testing')
     worker = worker_factory(darq)
     with pytest.raises(FailedJobs) as exc_info:
@@ -371,11 +387,11 @@ async def test_job_expired_run_check(darq, arq_redis, worker_factory, caplog):
 
 
 async def test_job_old(darq, arq_redis, worker_factory, caplog):
-    darq.task(foobar)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job(
-        'tests.test_worker.foobar', _job_id='testing', _defer_by=-2,
-    )
+    foobar_task = darq.task(foobar)
+    await darq.connect()
+
+    await foobar_task.apply_async([], {}, job_id='testing', defer_by=-2)
     worker = worker_factory(darq)
     assert worker.jobs_complete == 0
     assert worker.jobs_failed == 0
@@ -402,7 +418,7 @@ async def test_retry_repr():
 async def test_str_function(darq, arq_redis, worker_factory, caplog):
     darq.task(asyncio.sleep)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job('asyncio.tasks.sleep', _job_id='testing')
+    await arq_redis.enqueue_job('asyncio.tasks.sleep', [], {}, job_id='testing')
     worker = worker_factory(darq)
     assert worker.jobs_complete == 0
     assert worker.jobs_failed == 0
@@ -432,9 +448,10 @@ async def test_startup_shutdown(arq_redis, worker_factory):
         redis_settings=redis_settings, burst=True,
         on_startup=startup, on_shutdown=shutdown,
     )
-    darq.task(foobar)
+    foobar_task = darq.task(foobar)
+    await darq.connect()
 
-    await arq_redis.enqueue_job('tests.test_worker.foobar', _job_id='testing')
+    await foobar_task.apply_async([], {}, job_id='testing')
     worker = worker_factory(darq)
     await worker.main()
     await worker.close()
@@ -453,10 +470,10 @@ async def error_function():
 
 async def test_exc_extra(darq, arq_redis, worker_factory, caplog):
     caplog.set_level(logging.INFO)
-    darq.task(error_function)
-    await arq_redis.enqueue_job(
-        'tests.test_worker.error_function', _job_id='testing',
-    )
+    error_function_task = darq.task(error_function)
+    await darq.connect()
+
+    await error_function_task.apply_async([], {}, job_id='testing')
     worker = worker_factory(darq)
     await worker.main()
     assert worker.jobs_failed == 1
@@ -485,7 +502,7 @@ async def test_unpickleable(darq, arq_redis, worker_factory, caplog):
     darq.task(unpickleable)
 
     await arq_redis.enqueue_job(
-        'tests.test_worker.unpickleable', _job_id='testing',
+        'tests.test_worker.unpickleable', [], {}, job_id='testing',
     )
     worker = worker_factory(darq)
     await worker.main()
@@ -501,12 +518,14 @@ async def test_unpickleable(darq, arq_redis, worker_factory, caplog):
 
 
 async def test_log_health_check(arq_redis, worker_factory, caplog):
+    caplog.set_level(logging.INFO)
     darq = Darq(
         redis_settings=redis_settings, burst=True, health_check_interval=0,
     )
-    darq.task(foobar)
-    caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job('tests.test_worker.foobar', _job_id='testing')
+    foobar_task = darq.task(foobar)
+    await darq.connect()
+
+    await foobar_task.apply_async([], {}, job_id='testing')
     worker = worker_factory(darq)
     await worker.main()
     await worker.main()
@@ -521,14 +540,14 @@ async def test_log_health_check(arq_redis, worker_factory, caplog):
 
 
 async def test_remain_keys(darq, arq_redis, worker_factory):
-    darq.task(foobar)
+    foobar_task = darq.task(foobar)
+    await darq.connect()
+
     redis2 = await create_redis_pool(
         (redis_settings.host, redis_settings.port), encoding='utf8',
     )
     try:
-        await arq_redis.enqueue_job(
-            'tests.test_worker.foobar', _job_id='testing',
-        )
+        await foobar_task.apply_async([], {}, job_id='testing')
         assert sorted(await redis2.keys('*')) == [
             'arq:job:testing', 'arq:queue',
         ]
@@ -545,8 +564,10 @@ async def test_remain_keys(darq, arq_redis, worker_factory):
 
 
 async def test_remain_keys_no_results(darq, arq_redis, worker_factory):
-    darq.task(foobar, keep_result=0)
-    await arq_redis.enqueue_job('tests.test_worker.foobar', _job_id='testing')
+    foobar_task = darq.task(foobar, keep_result=0)
+    await darq.connect()
+
+    await foobar_task.apply_async([], {}, job_id='testing')
     assert sorted(await arq_redis.keys('*')) == ['arq:job:testing', 'arq:queue']
     worker = worker_factory(darq)
     await worker.main()
@@ -554,16 +575,20 @@ async def test_remain_keys_no_results(darq, arq_redis, worker_factory):
 
 
 async def test_run_check_passes(darq, arq_redis, worker_factory):
-    darq.task(foobar)
-    await arq_redis.enqueue_job('tests.test_worker.foobar')
-    await arq_redis.enqueue_job('tests.test_worker.foobar')
+    foobar_task = darq.task(foobar)
+    await darq.connect()
+
+    await foobar_task.apply_async([], {})
+    await foobar_task.apply_async([], {})
     worker = worker_factory(darq)
     assert 2 == await worker.run_check()
 
 
 async def test_run_check_error(darq, arq_redis, worker_factory):
-    darq.task(fails)
-    await arq_redis.enqueue_job('tests.test_worker.fails')
+    fails_task = darq.task(fails)
+    await darq.connect()
+
+    await fails_task.delay()
     worker = worker_factory(darq)
     with pytest.raises(
             FailedJobs, match=r"1 job failed TypeError\('my type error'",
@@ -572,9 +597,11 @@ async def test_run_check_error(darq, arq_redis, worker_factory):
 
 
 async def test_run_check_error2(darq, arq_redis, worker_factory):
-    darq.task(raise_on_value)
-    await arq_redis.enqueue_job('tests.test_worker.raise_on_value', 1)
-    await arq_redis.enqueue_job('tests.test_worker.raise_on_value', 1)
+    raise_on_value_task = darq.task(raise_on_value)
+    await darq.connect()
+
+    await raise_on_value_task.delay(1)
+    await raise_on_value_task.delay(1)
     worker = worker_factory(darq)
     with pytest.raises(FailedJobs, match='2 jobs failed:\n') as exc_info:
         await worker.run_check()
@@ -582,8 +609,10 @@ async def test_run_check_error2(darq, arq_redis, worker_factory):
 
 
 async def test_return_exception(darq, arq_redis, worker_factory):
-    darq.task(return_error)
-    j = await arq_redis.enqueue_job('tests.test_worker.return_error')
+    return_error_task = darq.task(return_error)
+    await darq.connect()
+
+    j = await return_error_task.delay()
     worker = worker_factory(darq)
     await worker.main()
     assert worker.jobs_complete == 1
@@ -596,8 +625,10 @@ async def test_return_exception(darq, arq_redis, worker_factory):
 
 
 async def test_error_success(darq, arq_redis, worker_factory):
-    darq.task(fails)
-    j = await arq_redis.enqueue_job('tests.test_worker.fails')
+    fails_task = darq.task(fails)
+    await darq.connect()
+
+    j = await fails_task.delay()
     worker = worker_factory(darq)
     await worker.main()
     assert worker.jobs_complete == 0
@@ -608,9 +639,11 @@ async def test_error_success(darq, arq_redis, worker_factory):
 
 
 async def test_many_jobs_expire(darq, arq_redis, worker_factory, caplog):
-    darq.task(foobar)
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job('tests.test_worker.foobar')
+    foobar_task = darq.task(foobar)
+    await darq.connect()
+
+    await foobar_task.delay()
     await asyncio.gather(*[
         arq_redis.zadd(default_queue_name, 1, f'testing-{i}')
         for i in range(100)
@@ -630,32 +663,30 @@ async def test_many_jobs_expire(darq, arq_redis, worker_factory, caplog):
 
 
 async def test_repeat_job_result(darq, arq_redis, worker_factory):
-    darq.task(foobar)
-    j1 = await arq_redis.enqueue_job(
-        'tests.test_worker.foobar', _job_id='job_id',
-    )
+    foobar_task = darq.task(foobar)
+    await darq.connect()
+
+    j1 = await foobar_task.apply_async([], {}, job_id='job_id')
     assert isinstance(j1, Job)
     assert await j1.status() == JobStatus.queued
 
-    j2 = await arq_redis.enqueue_job(
-        'tests.test_worker.foobar', _job_id='job_id',
-    )
+    j2 = await foobar_task.apply_async([], {}, job_id='job_id')
     assert j2 is None
 
     await worker_factory(darq).run_check()
     assert await j1.status() == JobStatus.complete
 
-    j3 = await arq_redis.enqueue_job(
-        'tests.test_worker.foobar', _job_id='job_id',
-    )
+    j3 = await foobar_task.apply_async([], {}, job_id='job_id')
     assert j3 is None
 
 
 async def test_queue_read_limit_equals_max_jobs(arq_redis, worker_factory):
     darq = Darq(redis_settings=redis_settings, burst=True, max_jobs=2)
-    darq.task(foobar)
+    foobar_task = darq.task(foobar)
+    await darq.connect()
+
     for _ in range(4):
-        await arq_redis.enqueue_job('tests.test_worker.foobar')
+        await foobar_task.delay()
 
     assert await arq_redis.zcard(default_queue_name) == 4
     worker = worker_factory(darq)
@@ -684,9 +715,11 @@ async def test_custom_queue_read_limit(arq_redis, worker_factory):
         redis_settings=redis_settings, burst=True, max_jobs=4,
         queue_read_limit=2,
     )
-    darq.task(foobar)
+    foobar_task = darq.task(foobar)
+    await darq.connect()
+
     for _ in range(4):
-        await arq_redis.enqueue_job('tests.test_worker.foobar')
+        await foobar_task.delay()
 
     assert await arq_redis.zcard(default_queue_name) == 4
     worker = worker_factory(darq)
@@ -716,10 +749,10 @@ async def test_custom_serializers(arq_redis_msgpack, worker_factory):
         job_serializer=msgpack.packb,
         job_deserializer=functools.partial(msgpack.unpackb, raw=False),
     )
-    darq.task(foobar)
-    j = await arq_redis_msgpack.enqueue_job(
-        'tests.test_worker.foobar', _job_id='job_id',
-    )
+    foobar_task = darq.task(foobar)
+    await darq.connect()
+
+    j = await foobar_task.apply_async([], {}, job_id='job_id')
     worker = worker_factory(darq)
     info = await j.info()
     assert info.function == 'tests.test_worker.foobar'
@@ -743,7 +776,8 @@ class UnpickleFails:
 async def test_deserialization_error(darq, arq_redis, worker_factory):
     darq.task(foobar)
     await arq_redis.enqueue_job(
-        'tests.test_worker.foobar', UnpickleFails('hello'), _job_id='job_id',
+        'tests.test_worker.foobar',
+        [UnpickleFails('hello')], {}, job_id='job_id',
     )
     worker = worker_factory(darq)
     with pytest.raises(FailedJobs) as exc_info:
@@ -758,7 +792,7 @@ async def test_incompatible_serializers_1(
 ):
     darq.task(foobar)
     await arq_redis_msgpack.enqueue_job(
-        'tests.test_worker.foobar', _job_id='job_id',
+        'tests.test_worker.foobar', [], {}, job_id='job_id',
     )
     worker = worker_factory(darq)
     await worker.main()
@@ -774,7 +808,10 @@ async def test_incompatible_serializers_2(arq_redis, worker_factory):
         job_deserializer=functools.partial(msgpack.unpackb, raw=False),
     )
     darq.task(foobar)
-    await arq_redis.enqueue_job('tests.test_worker.foobar', _job_id='job_id')
+
+    await arq_redis.enqueue_job(
+        'tests.test_worker.foobar', [], {}, job_id='job_id',
+    )
     worker = worker_factory(darq)
     await worker.main()
     assert worker.jobs_complete == 0
@@ -783,10 +820,12 @@ async def test_incompatible_serializers_2(arq_redis, worker_factory):
 
 
 async def test_max_jobs_completes(darq, arq_redis, worker_factory):
-    darq.task(raise_on_value)
-    await arq_redis.enqueue_job('tests.test_worker.raise_on_value')
-    await arq_redis.enqueue_job('tests.test_worker.raise_on_value', 1)
-    await arq_redis.enqueue_job('tests.test_worker.raise_on_value', 2)
+    raise_on_value_task = darq.task(raise_on_value)
+    await darq.connect()
+
+    await raise_on_value_task.delay()
+    await raise_on_value_task.delay(1)
+    await raise_on_value_task.delay(2)
     worker = worker_factory(darq)
     with pytest.raises(FailedJobs) as exc_info:
         await worker.run_check(max_burst_jobs=3)
@@ -796,8 +835,10 @@ async def test_max_jobs_completes(darq, arq_redis, worker_factory):
 async def test_max_bursts_sub_call(darq, arq_redis, worker_factory, caplog):
     caplog.set_level(logging.INFO)
     darq.task(foo)
-    darq.task(bar)
-    await arq_redis.enqueue_job('tests.test_worker.bar', 10)
+    bar_task = darq.task(bar)
+    await darq.connect()
+
+    await bar_task.delay(10)
     worker = worker_factory(darq)
     assert await worker.run_check(max_burst_jobs=1) == 1
     assert worker.jobs_complete == 1
@@ -809,9 +850,11 @@ async def test_max_bursts_sub_call(darq, arq_redis, worker_factory, caplog):
 
 async def test_max_bursts_multiple(darq, arq_redis, worker_factory, caplog):
     caplog.set_level(logging.INFO)
-    darq.task(foo)
-    await arq_redis.enqueue_job('tests.test_worker.foo', 1)
-    await arq_redis.enqueue_job('tests.test_worker.foo', 2)
+    foo_task = darq.task(foo)
+    await darq.connect()
+
+    await foo_task.delay(1)
+    await foo_task.delay(2)
     worker = worker_factory(darq)
     assert await worker.run_check(max_burst_jobs=1) == 1
     assert worker.jobs_complete == 1
@@ -822,10 +865,11 @@ async def test_max_bursts_multiple(darq, arq_redis, worker_factory, caplog):
 
 
 async def test_max_bursts_dont_get(darq, arq_redis, worker_factory):
-    darq.task(foo)
+    foo_task = darq.task(foo)
+    await darq.connect()
 
-    await arq_redis.enqueue_job('tests.test_worker.foo', 1)
-    await arq_redis.enqueue_job('tests.test_worker.foo', 2)
+    await foo_task.delay(1)
+    await foo_task.delay(2)
     await darq.connect()
     worker = worker_factory(darq)
 
@@ -837,8 +881,10 @@ async def test_max_bursts_dont_get(darq, arq_redis, worker_factory):
 
 async def test_non_burst(darq, arq_redis, worker_factory, caplog, loop):
     caplog.set_level(logging.INFO)
-    darq.task(foo)
-    await arq_redis.enqueue_job('tests.test_worker.foo', 1, _job_id='testing')
+    foo_task = darq.task(foo)
+    await darq.connect()
+
+    await foo_task.apply_async([1], {}, job_id='testing')
     worker = worker_factory(darq)
     worker.burst = False
     t = loop.create_task(worker.main())

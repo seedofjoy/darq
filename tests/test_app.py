@@ -47,7 +47,7 @@ def assert_worker_job_finished(
 
 async def foobar(a: int, enqueue_self=False) -> int:
     if enqueue_self:
-        await foobar.delay(a + 1, _job_id='enqueue_self')
+        await foobar.apply_async([a + 1], {}, job_id='enqueue_self')
     return 42 + a
 
 
@@ -84,7 +84,7 @@ async def test_task_decorator(darq, caplog, worker_factory):
 
     await darq.connect()
 
-    await foobar_task.delay(a=1, _job_id='testing')
+    await foobar_task.apply_async([], {'a': 1}, job_id='testing')
 
     worker = worker_factory(darq)
     assert worker.jobs_complete == 0
@@ -129,7 +129,7 @@ async def test_task_self_enqueue(darq, caplog, worker_factory):
     foobar_task = darq.task(foobar)
 
     await darq.connect()
-    await foobar_task.delay(1, _job_id='testing', enqueue_self=True)
+    await foobar_task.apply_async([1], {'enqueue_self': True}, job_id='testing')
 
     worker = worker_factory(darq)
     await worker.main()
@@ -154,14 +154,20 @@ async def test_on_job_callbacks(
 
     expected_metadata = {'test_var': 'ok'}
 
-    async def prepublish_side_effect(metadata, arq_function, args, kwargs):
+    async def prepublish_side_effect(
+            metadata, arq_function, args, kwargs, job_options,
+    ):
         metadata.update(expected_metadata)
         assert isinstance(arq_function, Function)
-        assert args == func_args
-        assert kwargs == {
-            '_expires': datetime.timedelta(days=1),
-            '_job_id': 'testing',
-            **func_kwargs,
+        assert args == list(func_args)
+        assert kwargs == func_kwargs
+        assert job_options == {
+            'job_id': 'testing',
+            'queue_name': None,
+            'defer_until': None,
+            'defer_by': None,
+            'expires': datetime.timedelta(days=1),
+            'job_try': None,
         }
 
     on_job_prerun = CoroutineMock()
@@ -183,7 +189,7 @@ async def test_on_job_callbacks(
     await darq.connect()
     job_id = 'testing'
     function_name = 'tests.test_app.foobar'
-    await foobar_task.delay(*func_args, _job_id=job_id, **func_kwargs)
+    await foobar_task.apply_async(func_args, func_kwargs, job_id=job_id)
 
     on_job_prepublish.assert_called_once()
 
@@ -226,33 +232,55 @@ async def test_on_job_callbacks(
 
 
 @pytest.mark.parametrize(
-    'darq_kwargs, task_kwargs, delay_args, delay_kwargs, expected_kwargs', [
+    'darq_kwargs, task_kwargs, func_args, func_kwargs, apply_async_kwargs,'
+    'expected_kwargs', [
         (
-            {}, {}, [], {},
-            {'_expires': datetime.timedelta(days=1)},
+            {}, {}, (), {}, {},
+            {
+                'defer_by': None, 'defer_until': None, 'job_id': None,
+                'job_try': None, 'queue_name': None,
+                'expires': datetime.timedelta(days=1),
+            },
         ),
         (
-            {'default_job_expires': 3600}, {}, [], {},
-            {'_expires': 3600},
+            {'default_job_expires': 3600}, {}, (), {}, {},
+            {
+                'defer_by': None, 'defer_until': None, 'job_id': None,
+                'job_try': None, 'queue_name': None,
+                'expires': 3600,
+            },
         ),
         (
-            {'default_job_expires': 3600}, {}, [], {'_expires': 32},
-            {'_expires': 32},
+            {'default_job_expires': 3600}, {}, (), {}, {'expires': 32},
+            {
+                'defer_by': None, 'defer_until': None, 'job_id': None,
+                'job_try': None, 'queue_name': None,
+                'expires': 32,
+            },
         ),
         (
-            {}, {'expires': 12}, [], {},
-            {'_expires': 12},
+            {}, {'expires': 12}, (), {}, {},
+            {
+                'defer_by': None, 'defer_until': None, 'job_id': None,
+                'job_try': None, 'queue_name': None,
+                'expires': 12,
+            },
         ),
         (
-            {}, {'expires': 12}, [], {'_expires': 200},
-            {'_expires': 200},
+            {}, {'expires': 12}, (), {}, {'expires': 200},
+            {
+                'defer_by': None, 'defer_until': None, 'job_id': None,
+                'job_try': None, 'queue_name': None,
+                'expires': 200,
+            },
         ),
     ],
 )
 @patch('darq.connections.ArqRedis.enqueue_job')
 async def test_enqueue_job_params(
         enqueue_job_patched,
-        darq_kwargs, task_kwargs, delay_args, delay_kwargs, expected_kwargs,
+        darq_kwargs, task_kwargs, func_args, func_kwargs, apply_async_kwargs,
+        expected_kwargs,
         arq_redis,
 ):
     enqueue_job_patched.reset_mock()
@@ -260,25 +288,28 @@ async def test_enqueue_job_params(
     darq = Darq(redis_settings=redis_settings, **darq_kwargs)
     foobar_task = darq.task(foobar, **task_kwargs)
     await darq.connect()
-    await foobar_task.delay(*delay_args, **delay_kwargs)
+    await foobar_task.apply_async(func_args, func_kwargs, **apply_async_kwargs)
 
     enqueue_job_patched.assert_called_once_with(
-        'tests.test_app.foobar',
+        'tests.test_app.foobar', func_args, func_kwargs,
         **expected_kwargs,
     )
     await darq.disconnect()
 
 
-@pytest.mark.parametrize('task_kwargs,delay_kwargs,expected', [
-    ({}, {}, 'arq:queue'),
-    ({'queue': 'my_q'}, {}, 'my_q'),
-    ({}, {'_queue_name': 'my_queue'}, 'my_queue'),
-    ({'queue': 'my_q'}, {'_queue_name': 'new_q'}, 'new_q'),
+@pytest.mark.parametrize('task_kwargs,apply_async_queue,expected', [
+    ({}, None, 'arq:queue'),
+    ({'queue': 'my_q'}, None, 'my_q'),
+    ({}, 'my_queue', 'my_queue'),
+    ({'queue': 'my_q'}, 'new_q', 'new_q'),
 ])
-async def test_task_queue(arq_redis, task_kwargs, delay_kwargs, expected, darq):
+async def test_task_queue(
+        task_kwargs, apply_async_queue, expected,
+        arq_redis, darq,
+):
     foobar_task = darq.task(foobar, **task_kwargs)
     await darq.connect()
 
-    job = await foobar_task.delay(**delay_kwargs)
+    job = await foobar_task.apply_async([], {}, queue=apply_async_queue)
     assert job._queue_name == expected
     await darq.disconnect()

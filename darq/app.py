@@ -14,6 +14,7 @@ from .registry import Registry
 from .types import AnyCallable
 from .types import AnyTimedelta
 from .types import DataDict
+from .types import JobEnqueueOptions
 from .types import OnJobPostrunType
 from .types import OnJobPrepublishType
 from .types import OnJobPrerunType
@@ -127,7 +128,11 @@ class Darq:
         if self.redis_pool:
             return
 
-        self.redis_pool = redis_pool or await create_pool(self.redis_settings)
+        self.redis_pool = redis_pool or await create_pool(
+            self.redis_settings,
+            job_serializer=self.worker_settings.job_serializer,
+            job_deserializer=self.worker_settings.job_deserializer,
+        )
 
     async def disconnect(self) -> None:
         if not self.redis_pool:
@@ -166,15 +171,44 @@ class Darq:
             queue: t.Optional[str] = None,
             expires: t.Optional[AnyTimedelta] = None,
     ) -> t.Any:
+        task_queue = queue
+        task_expires = expires
 
         def _decorate(function: AnyCallable) -> AnyCallable:
             name = get_function_name(function)
 
-            async def delay(*args: t.Any, **kwargs: t.Any) -> t.Optional[Job]:
-                if queue and '_queue_name' not in kwargs:
-                    kwargs['_queue_name'] = queue
-                if '_expires' not in kwargs:
-                    kwargs['_expires'] = expires or self.default_job_expires
+            async def apply_async(
+                    args: t.Sequence[t.Any],
+                    kwargs: t.Mapping[str, t.Any],
+                    *,
+                    job_id: t.Optional[str] = None,
+                    queue: t.Optional[str] = None,
+                    defer_until: t.Optional[datetime.datetime] = None,
+                    defer_by: t.Optional[AnyTimedelta] = None,
+                    expires: t.Optional[AnyTimedelta] = None,
+                    job_try: t.Optional[int] = None,
+            ) -> t.Optional[Job]:
+                """
+                Enqueue a job with params.
+
+                :param args: args to pass to the function
+                :param kwargs: any keyword arguments to pass to the function
+                :param job_id: ID of the job, can be used to enforce job
+                               uniqueness
+                :param queue: queue of the job, can be used to create job in
+                              different queue
+                :param defer_until: datetime at which to run the job
+                :param defer_by: duration to wait before running the job
+                :param expires: if the job still hasn't started after this
+                                duration, do not run it
+                :param job_try: useful when re-enqueueing jobs within a job
+                :return: :class:`darq.jobs.Job` instance or ``None`` if a job
+                         with this ID already exists
+                """
+                args = list(args)
+                kwargs = dict(kwargs)
+                queue = queue or task_queue
+                expires = expires or task_expires or self.default_job_expires
 
                 if not self.redis_pool:
                     raise DarqConnectionError(
@@ -184,14 +218,26 @@ class Darq:
                     )
                 metadata: DataDict = {}
 
+                job_options = JobEnqueueOptions({
+                    'job_id': job_id, 'queue_name': queue,
+                    'defer_until': defer_until, 'defer_by': defer_by,
+                    'expires': expires, 'job_try': job_try,
+                })
+
                 self.on_job_prepublish and await self.on_job_prepublish(
-                    metadata, self.registry[name], args, kwargs,
+                    metadata, self.registry[name], args, kwargs, job_options,
                 )
                 if metadata:
                     kwargs['__metadata__'] = metadata
-                return await self.redis_pool.enqueue_job(name, *args, **kwargs)
+                return await self.redis_pool.enqueue_job(
+                    name, tuple(args), kwargs, **job_options,
+                )
+
+            async def delay(*args: t.Any, **kwargs: t.Any) -> t.Optional[Job]:
+                return await apply_async(args, kwargs)
 
             function.delay = delay  # type: ignore
+            function.apply_async = apply_async  # type: ignore
             arq_function = worker_func(
                 coroutine=function, name=name,
                 keep_result=keep_result, timeout=timeout, max_tries=max_tries,
