@@ -37,7 +37,7 @@ jobs:
 
     - name: Lint with flake8
       run: |
-        flake8 darq/ test/ --count --show-source --statistics
+        flake8 darq/ tests/ --count --show-source --statistics
 
     - name: Test with pytest
       env:
