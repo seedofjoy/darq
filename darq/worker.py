@@ -446,7 +446,7 @@ class Worker:
         try:
             function: t.Union[Function, CronJob] = self.functions[function_name]
         except KeyError:
-            log.warning('job %s, function %r not found', job_id, function_name)
+            log.error('job %s, function %r not found', job_id, function_name)
             await job_failed(
                 JobExecutionFailed(f'function {function_name!r} not found'),
             )
