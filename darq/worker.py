@@ -53,6 +53,7 @@ CtxType = t.Dict[t.Any, t.Any]
 class Function:
     name: str
     coroutine: CoroutineType
+    default_queue: t.Optional[str]
     timeout_s: t.Optional[float]
     keep_result_s: t.Optional[float]
     max_tries: t.Optional[int]
@@ -62,6 +63,7 @@ def func(
         coroutine: t.Union[str, Function, CoroutineType],
         *,
         name: t.Optional[str] = None,
+        default_queue: t.Optional[str] = None,
         keep_result: t.Optional[SecondsTimedelta] = None,
         timeout: t.Optional[SecondsTimedelta] = None,
         max_tries: t.Optional[int] = None,
@@ -90,8 +92,9 @@ def func(
     keep_result = to_seconds(keep_result)
 
     return Function(
-        name or coroutine.__qualname__, coroutine, timeout, keep_result,
-        max_tries,
+        name=name or coroutine.__qualname__, coroutine=coroutine,
+        default_queue=default_queue, timeout_s=timeout,
+        keep_result_s=keep_result, max_tries=max_tries,
     )
 
 
@@ -197,8 +200,13 @@ class Worker:
         self.queue_name = settings.queue_name
         self.cron_jobs: t.List[CronJob] = []
         if app.cron_jobs:
-            self.cron_jobs = list(app.cron_jobs)
-            self.functions.update({cj.name: cj for cj in self.cron_jobs})
+            funcs_by_coroutine = {f.coroutine: f for f in app.registry.values()}
+            for cron_job in app.cron_jobs:
+                f = funcs_by_coroutine[cron_job.coroutine]
+                if not f.default_queue or f.default_queue == self.queue_name:
+                    self.cron_jobs.append(cron_job)
+                    self.functions[cron_job.name] = cron_job
+
         assert len(self.functions) > 0, \
             'at least one function or cron_job must be registered'
         self.burst = settings.burst

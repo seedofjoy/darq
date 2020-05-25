@@ -104,7 +104,7 @@ class Darq:
             default_job_expires: AnyTimedelta = TD_1_DAY,
     ) -> None:
         self.worker_settings = WorkerSettings(
-            queue_name=default_queue_name, burst=burst, max_jobs=max_jobs,
+            queue_name=queue_name, burst=burst, max_jobs=max_jobs,
             job_timeout=job_timeout, keep_result=keep_result,
             poll_delay=poll_delay, queue_read_limit=queue_read_limit,
             max_tries=max_tries, health_check_interval=health_check_interval,
@@ -239,7 +239,7 @@ class Darq:
             function.delay = delay  # type: ignore
             function.apply_async = apply_async  # type: ignore
             arq_function = worker_func(
-                coroutine=function, name=name,
+                coroutine=function, name=name, default_queue=task_queue,
                 keep_result=keep_result, timeout=timeout, max_tries=max_tries,
             )
             self.registry.add(arq_function)

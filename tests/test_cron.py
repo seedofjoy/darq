@@ -146,6 +146,10 @@ async def foobar():
     return 42
 
 
+async def foobar_custom():
+    return 52
+
+
 async def test_add_cron_jobs(darq, caplog, worker_factory, arq_redis):
     caplog.set_level(logging.INFO)
 
@@ -199,21 +203,36 @@ async def test_add_cron_jobs(darq, caplog, worker_factory, arq_redis):
 async def test_job_successful_on_specific_queue(darq, worker_factory, caplog):
     caplog.set_level(logging.INFO)
 
-    foobar_task = darq.task(foobar)
-    darq.add_cron_jobs(
-        cron(foobar_task, hour=1, run_at_startup=True),
-    )
-    worker = worker_factory(darq, queue_name='darq:test-cron-queue')
-    await worker.main()
-    assert worker.jobs_complete == 1
-    assert worker.jobs_failed == 0
-    assert worker.jobs_retried == 0
+    foobar_task_default_queue = darq.task(foobar)
+    foobar_task_custom_queue = darq.task(foobar_custom, queue='custom_queue')
 
+    darq.add_cron_jobs(
+        cron(foobar_task_default_queue, hour=1, run_at_startup=True),
+        cron(foobar_task_custom_queue, hour=1, run_at_startup=True),
+    )
+
+    worker_default_queue = worker_factory(darq)
+    await worker_default_queue.main()
+    assert worker_default_queue.jobs_complete == 1
+    assert worker_default_queue.jobs_failed == 0
+    assert worker_default_queue.jobs_retried == 0
     assert_worker_job_finished(
         records=caplog.records,
         job_id='cron',
         function_name='foobar',
         result='42',
+    )
+
+    worker_custom_queue = worker_factory(darq, queue_name='custom_queue')
+    await worker_custom_queue.main()
+    assert worker_custom_queue.jobs_complete == 1
+    assert worker_custom_queue.jobs_failed == 0
+    assert worker_custom_queue.jobs_retried == 0
+    assert_worker_job_finished(
+        records=caplog.records,
+        job_id='cron',
+        function_name='foobar_custom',
+        result='52',
     )
 
 

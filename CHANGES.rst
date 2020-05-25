@@ -8,6 +8,7 @@ Changelog
 * Fork ``arq`` to project and merge it with ``darq`` (It was easier to rewrite ``arq`` than to write a wrapper)
 * **Breaking change**: Remove "magic" params from ``.delay``. For enqueue job with special params added ``.apply_async``.
 * Add ``watch``-mode to CLI.
+* Fix: Now worker will not run cronjob if it's functions queue not match with worker's
 
 0.6.0 (2020-03-08)
 ..................
