@@ -178,8 +178,8 @@ class Darq:
             name = get_function_name(function)
 
             async def apply_async(
-                    args: t.Sequence[t.Any],
-                    kwargs: t.Mapping[str, t.Any],
+                    args: t.Optional[t.Sequence[t.Any]] = None,
+                    kwargs: t.Optional[t.Mapping[str, t.Any]] = None,
                     *,
                     job_id: t.Optional[str] = None,
                     queue: t.Optional[str] = None,
@@ -205,8 +205,8 @@ class Darq:
                 :return: :class:`darq.jobs.Job` instance or ``None`` if a job
                          with this ID already exists
                 """
-                args = list(args)
-                kwargs = dict(kwargs)
+                args = list(args) if args is not None else []
+                kwargs = dict(kwargs) if kwargs is not None else {}
                 queue = queue or task_queue
                 expires = expires or task_expires or self.default_job_expires
 

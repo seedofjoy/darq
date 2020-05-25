@@ -3,6 +3,10 @@
 Changelog
 ---------
 
+0.7.1 (2020-05-25)
+..................
+* ``.apply_async``: Make ``args`` and ``kwargs`` arguments optional
+
 0.7.0 (2020-05-25)
 ..................
 * Fork ``arq`` to project and merge it with ``darq`` (It was easier to rewrite ``arq`` than to write a wrapper)
