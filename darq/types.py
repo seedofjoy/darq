@@ -10,6 +10,7 @@ else:
 if t.TYPE_CHECKING:
     import darq
     from darq.cron import CronJob  # noqa F401
+    from darq.worker import Function  # noqa F401
 
 AnyCallable = t.Callable[..., t.Any]
 AnyTimedelta = t.Union[int, float, datetime.timedelta]
@@ -17,8 +18,10 @@ AnyDict = t.Dict[t.Any, t.Any]
 DataDict = t.Dict[str, t.Any]
 ArgsType = t.Sequence[t.Any]
 KwargsType = t.Mapping[str, t.Any]
+MutableArgsType = t.List[t.Any]
+MutableKwargsType = t.Dict[str, t.Any]
 
-FunctionOrCronJob = t.Union['darq.worker.Function', 'CronJob']
+FunctionOrCronJob = t.Union['Function', 'CronJob']
 
 
 class JobCtx(TypedDict):
@@ -48,6 +51,9 @@ OnJobPostrunType = t.Callable[
     t.Awaitable[None],
 ]
 OnJobPrepublishType = t.Callable[
-    [DataDict, FunctionOrCronJob, ArgsType, KwargsType, JobEnqueueOptions],
+    [
+        DataDict, 'Function', MutableArgsType, MutableKwargsType,
+        JobEnqueueOptions,
+    ],
     t.Awaitable[None],
 ]

@@ -3,6 +3,10 @@
 Changelog
 ---------
 
+0.7.2 (unpublished)
+...................
+* Fix some types (cron, OnJobPrepublishType)
+
 0.7.1 (2020-05-25)
 ..................
 * ``.apply_async``: Make ``args`` and ``kwargs`` arguments optional
