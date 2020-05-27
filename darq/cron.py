@@ -11,6 +11,7 @@ from .utils import to_seconds
 
 R = t.TypeVar('R')
 Coro = t.TypeVar('Coro', bound=t.Callable[..., t.Awaitable[R]])
+CronIterable = t.Union[t.Set[int], t.List[int], t.Tuple[int]]
 
 
 class D:
@@ -92,12 +93,12 @@ def _get_next_dt(
 def next_cron(
     previous_dt: datetime,
     *,
-    month: t.Union[None, t.Sequence[int], int] = None,
-    day: t.Union[None, t.Sequence[int], int] = None,
-    weekday: t.Union[None, t.Sequence[int], int, str] = None,
-    hour: t.Union[None, t.Sequence[int], int] = None,
-    minute: t.Union[None, t.Sequence[int], int] = None,
-    second: t.Union[None, t.Sequence[int], int] = 0,
+    month: t.Union[None, CronIterable, int] = None,
+    day: t.Union[None, CronIterable, int] = None,
+    weekday: t.Union[None, CronIterable, int, str] = None,
+    hour: t.Union[None, CronIterable, int] = None,
+    minute: t.Union[None, CronIterable, int] = None,
+    second: t.Union[None, CronIterable, int] = 0,
     microsecond: int = 123_456,
 ) -> datetime:
     """
@@ -122,12 +123,12 @@ def next_cron(
 class CronJob:
     name: str
     coroutine: t.Callable[..., t.Awaitable[R]]
-    month: t.Union[None, t.Sequence[int], int]
-    day: t.Union[None, t.Sequence[int], int]
-    weekday: t.Union[None, t.Sequence[int], int, str]
-    hour: t.Union[None, t.Sequence[int], int]
-    minute: t.Union[None, t.Sequence[int], int]
-    second: t.Union[None, t.Sequence[int], int]
+    month: t.Union[None, CronIterable, int]
+    day: t.Union[None, CronIterable, int]
+    weekday: t.Union[None, CronIterable, int, str]
+    hour: t.Union[None, CronIterable, int]
+    minute: t.Union[None, CronIterable, int]
+    second: t.Union[None, CronIterable, int]
     microsecond: int
     run_at_startup: bool
     unique: bool
@@ -158,12 +159,12 @@ def cron(
     coroutine: t.Union[str, Coro],
     *,
     name: t.Optional[str] = None,
-    month: t.Union[None, t.Sequence[int], int] = None,
-    day: t.Union[None, t.Sequence[int], int] = None,
-    weekday: t.Union[None, t.Sequence[int], int, str] = None,
-    hour: t.Union[None, t.Sequence[int], int] = None,
-    minute: t.Union[None, t.Sequence[int], int] = None,
-    second: t.Union[None, t.Sequence[int], int] = 0,
+    month: t.Union[None, CronIterable, int] = None,
+    day: t.Union[None, CronIterable, int] = None,
+    weekday: t.Union[None, CronIterable, int, str] = None,
+    hour: t.Union[None, CronIterable, int] = None,
+    minute: t.Union[None, CronIterable, int] = None,
+    second: t.Union[None, CronIterable, int] = 0,
     microsecond: int = 123_456,
     run_at_startup: bool = False,
     unique: bool = True,
