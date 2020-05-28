@@ -4,6 +4,9 @@ darq
 .. image:: https://github.com/seedofjoy/darq/workflows/Lint%20&%20test/badge.svg?branch=master
    :target: https://github.com/seedofjoy/darq/actions
 
+.. image:: https://codecov.io/gh/seedofjoy/darq/branch/master/graph/badge.svg
+  :target: https://codecov.io/gh/seedofjoy/darq
+
 |
 
 Async task manager with Celery-like features. Fork of `arq <http://github.com/samuelcolvin/arq>`_.
