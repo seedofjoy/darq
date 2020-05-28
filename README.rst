@@ -1,6 +1,8 @@
 darq
 ====
 
+[ ~ Dependencies scanned by PyUp.io ~ ]
+
 .. image:: https://github.com/seedofjoy/darq/workflows/Lint%20&%20test/badge.svg?branch=master
    :target: https://github.com/seedofjoy/darq/actions
 
