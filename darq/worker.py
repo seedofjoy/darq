@@ -12,8 +12,6 @@ import async_timeout
 from aioredis import MultiExecError
 from pydantic.utils import import_string
 
-from darq.cron import CronJob
-from darq.utils import poll
 from .connections import create_pool
 from .connections import log_redis_info
 from .connections import RedisSettings
@@ -31,12 +29,12 @@ from .jobs import serialize_result
 from .jobs import Serializer
 from .utils import args_to_string
 from .utils import ms_to_datetime
+from .utils import poll
 from .utils import SecondsTimedelta
 from .utils import timestamp_ms
 from .utils import to_ms
 from .utils import to_seconds
 from .utils import to_seconds_strict
-from .utils import to_unix_ms
 from .utils import truncate
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -195,17 +193,8 @@ class Worker:
     ) -> None:
         settings = dataclasses.replace(app.worker_settings, **replace_kwargs)
         self.app = app
-        self.functions: t.Dict[str, t.Union[Function, CronJob]] = \
-            dict(app.registry)
+        self.functions: t.Dict[str, Function] = dict(app.registry)
         self.queue_name = settings.queue_name
-        self.cron_jobs: t.List[CronJob] = []
-        if app.cron_jobs:
-            funcs_by_coroutine = {f.coroutine: f for f in app.registry.values()}
-            for cron_job in app.cron_jobs:
-                f = funcs_by_coroutine[cron_job.coroutine]
-                if not f.default_queue or f.default_queue == self.queue_name:
-                    self.cron_jobs.append(cron_job)
-                    self.functions[cron_job.name] = cron_job
 
         assert len(self.functions) > 0, \
             'at least one function or cron_job must be registered'
@@ -444,7 +433,7 @@ class Worker:
             return
 
         try:
-            function: t.Union[Function, CronJob] = self.functions[function_name]
+            function = self.functions[function_name]
         except KeyError:
             log.error('job %s, function %r not found', job_id, function_name)
             await job_failed(
@@ -452,11 +441,7 @@ class Worker:
             )
             return
 
-        if hasattr(function, 'next_run'):
-            # cron_job
-            ref = function_name
-        else:
-            ref = f'{job_id}:{function_name}'
+        ref = f'{job_id}:{function_name}'
 
         if enqueue_job_try and enqueue_job_try > job_try:
             job_try = enqueue_job_try
@@ -641,34 +626,6 @@ class Worker:
 
     async def heart_beat(self) -> None:
         await self.record_health()
-        await self.run_cron()
-
-    async def run_cron(self) -> None:
-        n = datetime.now()
-        job_futures = set()
-
-        for cron_job in self.cron_jobs:
-            if cron_job.next_run is None:
-                if cron_job.run_at_startup:
-                    cron_job.next_run = n
-                else:
-                    cron_job.set_next(n)
-
-            cron_job.next_run = t.cast(datetime, cron_job.next_run)
-
-            if n >= cron_job.next_run:
-                job_id = (
-                    f'{cron_job.name}:{to_unix_ms(cron_job.next_run)}'
-                    if cron_job.unique
-                    else None
-                )
-                job_futures.add(self.pool.enqueue_job(
-                    cron_job.name, [], {},
-                    job_id=job_id, queue_name=self.queue_name,
-                ))
-                cron_job.set_next(n)
-
-        job_futures and await asyncio.gather(*job_futures)
 
     async def record_health(self) -> None:
         now_ts = time()

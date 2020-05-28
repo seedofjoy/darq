@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from pydantic.utils import import_string
 
+from .utils import get_function_name
 from .utils import SecondsTimedelta
 from .utils import to_seconds
 
@@ -122,7 +123,7 @@ def next_cron(
 @dataclass
 class CronJob:
     name: str
-    coroutine: t.Callable[..., t.Awaitable[R]]
+    task: t.Callable[..., t.Awaitable[R]]
     month: t.Union[None, CronIterable, int]
     day: t.Union[None, CronIterable, int]
     weekday: t.Union[None, CronIterable, int, str]
@@ -154,9 +155,12 @@ class CronJob:
             ' '.join(f'{k}={v}' for k, v in self.__dict__.items()),
         )
 
+    def __str__(self) -> str:
+        return get_function_name(self.task)
+
 
 def cron(
-    coroutine: t.Union[str, Coro],
+    task: t.Union[str, Coro],
     *,
     name: t.Optional[str] = None,
     month: t.Union[None, CronIterable, int] = None,
@@ -179,8 +183,8 @@ def cron(
     If ``unique`` is true (the default) the job will only be run once even
     if multiple workers are running.
 
-    :param coroutine: coroutine function to run
-    :param name: name of the job, if None, the name of the coroutine is used
+    :param task: task function to run
+    :param name: name of the job, if None, the name of the task is used
     :param month: month(s) to run the job on, 1 - 12
     :param day: day(s) to run the job on, 1 - 31
     :param weekday: week day(s) to run the job on, 0 - 6 or mon - sun
@@ -196,20 +200,20 @@ def cron(
     :param max_tries: maximum number of tries for the job
     """
 
-    if isinstance(coroutine, str):
-        name = name or 'cron:' + coroutine
-        coroutine = import_string(coroutine)
+    if isinstance(task, str):
+        name = name or 'cron:' + task
+        task = import_string(task)
 
-    coroutine = t.cast(Coro, coroutine)
+    task = t.cast(Coro, task)
 
-    assert asyncio.iscoroutinefunction(coroutine), \
-        f'{coroutine} is not a coroutine function'
+    assert asyncio.iscoroutinefunction(task), \
+        f'{task} is not a coroutine function'
     timeout = to_seconds(timeout)
     keep_result = to_seconds(keep_result)
 
     return CronJob(
-        name or 'cron:' + coroutine.__qualname__,
-        coroutine,
+        name or 'cron:' + task.__qualname__,
+        task,
         month,
         day,
         weekday,

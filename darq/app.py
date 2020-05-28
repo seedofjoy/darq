@@ -150,13 +150,13 @@ class Darq:
         :param cron_jobs: list of cron jobs to run,
                           use :func:`darq.cron.cron` to create them
         """
-        registered_coroutines = {f.coroutine for f in self.registry.values()}
+        registered_tasks = {f.coroutine for f in self.registry.values()}
         for cj in cron_jobs:
             if not isinstance(cj, CronJob):
                 raise DarqException(f'{cj!r} must be instance of CronJob')
-            if cj.coroutine not in registered_coroutines:
+            if cj.task not in registered_tasks:
                 raise DarqException(
-                    f'{cj.coroutine!r} is not registered. '
+                    f'{cj.task!r} is not registered. '
                     'Please, wrap it with @task decorator.',
                 )
             self.cron_jobs.append(cj)
