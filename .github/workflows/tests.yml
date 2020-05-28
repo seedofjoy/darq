@@ -32,19 +32,16 @@ jobs:
         pip install -e .[watch]
 
     - name: Lint with mypy
-      run: |
-        mypy darq/
+      run: mypy darq/
 
     - name: Lint with flake8
-      run: |
-        flake8 darq/ tests/ --count --show-source --statistics
+      run: flake8
 
     - name: Test with pytest
       env:
         REDIS_HOST: localhost
         REDIS_PORT: ${{ job.services.redis.ports[6379] }}
-      run: |
-        pytest --cov=darq --cov-report=xml
+      run: pytest
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1

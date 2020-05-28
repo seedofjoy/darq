@@ -104,5 +104,5 @@ async def watch_reload(
         await worker.close()
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     cli()
