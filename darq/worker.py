@@ -39,7 +39,7 @@ from .utils import to_seconds_strict
 from .utils import to_unix_ms
 from .utils import truncate
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from darq import Darq
 
 log = logging.getLogger('darq.worker')

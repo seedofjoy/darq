@@ -7,7 +7,7 @@ if sys.version_info >= (3, 8):
 else:
     from typing_extensions import TypedDict
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     import darq
     from darq.cron import CronJob  # noqa F401
     from darq.worker import Function  # noqa F401

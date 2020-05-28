@@ -3,7 +3,7 @@ from collections import UserDict
 
 from . import worker
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     BaseRegistry = UserDict[str, worker.Function]
 else:
     BaseRegistry = UserDict
