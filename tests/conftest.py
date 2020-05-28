@@ -6,6 +6,7 @@ from aioredis import create_redis_pool
 
 from darq import Darq
 from darq.connections import ArqRedis
+from darq.scheduler import create_scheduler
 from darq.worker import create_worker
 from . import redis_settings
 
@@ -57,6 +58,18 @@ async def worker_factory(arq_redis):
 
     if worker_:
         await worker_.close()
+
+
+@pytest.fixture
+async def scheduler_factory(arq_redis):
+    scheduler = None
+
+    def create(darq):
+        nonlocal scheduler
+        scheduler = create_scheduler(darq)
+        return scheduler
+
+    yield create
 
 
 @pytest.fixture

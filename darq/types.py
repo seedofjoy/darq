@@ -9,7 +9,6 @@ else:
 
 if t.TYPE_CHECKING:  # pragma: no cover
     import darq
-    from darq.cron import CronJob  # noqa F401
     from darq.worker import Function  # noqa F401
 
 AnyCallable = t.Callable[..., t.Any]
@@ -20,8 +19,6 @@ ArgsType = t.Sequence[t.Any]
 KwargsType = t.Mapping[str, t.Any]
 MutableArgsType = t.List[t.Any]
 MutableKwargsType = t.Dict[str, t.Any]
-
-FunctionOrCronJob = t.Union['Function', 'CronJob']
 
 
 class JobCtx(TypedDict):
@@ -43,11 +40,11 @@ class JobEnqueueOptions(TypedDict):
 
 
 OnJobPrerunType = t.Callable[
-    [AnyDict, FunctionOrCronJob, ArgsType, KwargsType],
+    [AnyDict, 'Function', ArgsType, KwargsType],
     t.Awaitable[None],
 ]
 OnJobPostrunType = t.Callable[
-    [AnyDict, FunctionOrCronJob, ArgsType, KwargsType, t.Any],
+    [AnyDict, 'Function', ArgsType, KwargsType, t.Any],
     t.Awaitable[None],
 ]
 OnJobPrepublishType = t.Callable[

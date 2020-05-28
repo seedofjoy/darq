@@ -10,6 +10,7 @@ from pydantic.utils import import_string
 
 from .app import Darq
 from .logs import default_log_config
+from .scheduler import run_scheduler
 from .version import VERSION
 from .worker import check_health
 from .worker import create_worker
@@ -74,6 +75,16 @@ def worker(ctx: click.Context, *, queue: str, watch: str, check: bool) -> None:
             )
         else:
             run_worker(darq, **overwrite_settings)
+
+
+@cli.command()
+@click.pass_context
+def scheduler(ctx: click.Context) -> None:
+    """
+    CLI to run the scheduler (cron jobs)
+    """
+    darq = ctx.obj['darq']
+    run_scheduler(darq)
 
 
 async def watch_reload(

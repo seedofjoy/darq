@@ -150,12 +150,16 @@ async def foobar_custom():
     return 52
 
 
-async def test_add_cron_jobs(darq, caplog, worker_factory, arq_redis):
+async def test_add_cron_jobs(
+        darq, caplog, worker_factory, scheduler_factory, arq_redis,
+        mocker,
+):
     caplog.set_level(logging.INFO)
 
     with pytest.raises(DarqException):
         darq.add_cron_jobs(cron(foobar))
 
+    mocker.patch('darq.scheduler.to_unix_ms', lambda x: 321)
     foobar_task = darq.task(foobar)
     darq.add_cron_jobs(
         cron('tests.test_cron.foobar', run_at_startup=True),
@@ -165,6 +169,8 @@ async def test_add_cron_jobs(darq, caplog, worker_factory, arq_redis):
         cron(foobar_task, name='custom_name2', run_at_startup=True),
     )
 
+    scheduler = scheduler_factory(darq)
+    await scheduler.main()
     worker = worker_factory(darq)
     assert worker.jobs_complete == 0
     assert worker.jobs_failed == 0
@@ -174,42 +180,50 @@ async def test_add_cron_jobs(darq, caplog, worker_factory, arq_redis):
     assert worker.jobs_failed == 0
     assert worker.jobs_retried == 0
 
+    function_name = 'tests.test_cron.foobar'
     assert_worker_job_finished(
         records=caplog.records,
-        job_id='cron',
-        function_name='tests.test_cron.foobar',
+        job_id='cron:tests.test_cron.foobar:321',
+        function_name=function_name,
         result='42',
     )
     assert_worker_job_finished(
         records=caplog.records,
-        job_id='cron',
-        function_name='foobar',
+        job_id='cron:foobar:321',
+        function_name=function_name,
         result='42',
     )
     assert_worker_job_finished(
         records=caplog.records,
-        job_id='',
-        function_name='custom_name',
+        job_id='custom_name:321',
+        function_name=function_name,
         result='42',
     )
     assert_worker_job_finished(
         records=caplog.records,
-        job_id='',
-        function_name='custom_name2',
+        job_id='custom_name2:321',
+        function_name=function_name,
         result='42',
     )
 
 
-async def test_job_successful_on_specific_queue(darq, worker_factory, caplog):
+async def test_job_successful_on_specific_queue(
+        darq, worker_factory, scheduler_factory, caplog, mocker,
+):
     caplog.set_level(logging.INFO)
 
     foobar_task_default_queue = darq.task(foobar)
     foobar_task_custom_queue = darq.task(foobar_custom, queue='custom_queue')
 
+    mocker.patch('darq.scheduler.to_unix_ms', lambda x: 3215)
+
     darq.add_cron_jobs(
         cron(foobar_task_default_queue, hour=1, run_at_startup=True),
         cron(foobar_task_custom_queue, hour=1, run_at_startup=True),
     )
+
+    scheduler = scheduler_factory(darq)
+    await scheduler.main()
 
     worker_default_queue = worker_factory(darq)
     await worker_default_queue.main()
@@ -218,8 +232,8 @@ async def test_job_successful_on_specific_queue(darq, worker_factory, caplog):
     assert worker_default_queue.jobs_retried == 0
     assert_worker_job_finished(
         records=caplog.records,
-        job_id='cron',
-        function_name='foobar',
+        job_id='cron:foobar:3215',
+        function_name='tests.test_cron.foobar',
         result='42',
     )
 
@@ -230,8 +244,8 @@ async def test_job_successful_on_specific_queue(darq, worker_factory, caplog):
     assert worker_custom_queue.jobs_retried == 0
     assert_worker_job_finished(
         records=caplog.records,
-        job_id='cron',
-        function_name='foobar_custom',
+        job_id='cron:foobar_custom:3215',
+        function_name='tests.test_cron.foobar_custom',
         result='52',
     )
 
@@ -255,13 +269,11 @@ async def test_not_run(darq, worker_factory, caplog, arq_redis):
 
 async def test_repr():
     cj = cron(foobar, hour=1, run_at_startup=True)
-    assert str(cj).startswith(
-        '<CronJob name=cron:foobar coroutine=<function foobar at',
+    assert repr(cj).startswith(
+        '<CronJob name=cron:foobar task=<function foobar at',
     )
 
 
 async def test_str_function():
-    cj = cron('asyncio.sleep', hour=1, run_at_startup=True)
-    assert str(cj).startswith(
-        '<CronJob name=cron:asyncio.sleep coroutine=<function sleep at',
-    )
+    cj = cron(foobar, hour=1, run_at_startup=True)
+    assert str(cj).startswith('tests.test_cron.foobar')

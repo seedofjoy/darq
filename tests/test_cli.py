@@ -3,6 +3,7 @@ from click.testing import CliRunner
 
 from darq import Darq
 from darq.cli import cli
+from darq.cron import cron
 from . import redis_settings
 
 darq = Darq(redis_settings=redis_settings, burst=True)
@@ -54,3 +55,22 @@ def test_worker_run_watch(mocker):
         ])
     assert result.exit_code == 0
     assert '1 files changed, reloading darq worker...' in result.output
+
+
+async def mock_poll():
+    yield
+
+
+def test_scheduler_run(mocker):
+    mocker.patch('darq.scheduler.poll', return_value=mock_awatch())
+    runner = CliRunner()
+
+    darq.add_cron_jobs(cron(foobar, hour=1))
+
+    with loop_context():
+        result = runner.invoke(cli, ['-A', 'tests.test_cli.darq', 'scheduler'])
+    assert result.exit_code == 0
+    cli_output = (
+        'Starting cron scheduler for 1 cron jobs: \ntests.test_cli.foobar\n'
+    )
+    assert cli_output in result.output
