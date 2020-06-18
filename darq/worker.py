@@ -510,6 +510,9 @@ class Worker:
         start_ms = timestamp_ms()
         success = False
         try:
+            if self.on_job_prerun:
+                await self.on_job_prerun(ctx, function, args, kwargs)
+
             s = args_to_string(args, kwargs)
             extra = f' try={job_try}' if job_try > 1 else ''
             if (start_ms - score) > 1200:
@@ -522,15 +525,7 @@ class Worker:
             # raise exceptions
             try:
                 async with async_timeout.timeout(timeout_s):
-                    if self.on_job_prerun:
-                        await self.on_job_prerun(ctx, function, args, kwargs)
-
                     result = await function.coroutine(*args, **kwargs)
-
-                    if self.on_job_postrun:
-                        await self.on_job_postrun(
-                            ctx, function, args, kwargs, result,
-                        )
             except Exception as e:
                 exc_extra = getattr(e, 'extra', None)
                 if callable(exc_extra):
@@ -596,6 +591,8 @@ class Worker:
         await asyncio.shield(self.finish_job(
             job_id, finish, result_data, result_timeout_s, incr_score,
         ))
+        if self.on_job_postrun:
+            await self.on_job_postrun(ctx, function, args, kwargs, result)
 
     async def finish_job(
             self, job_id: str, finish: bool, result_data: t.Optional[bytes],
