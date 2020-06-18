@@ -99,7 +99,7 @@ async def test_handle_sig_hard(darq, caplog, worker_factory):
     worker.main_task = MagicMock()
     worker.tasks = [long_running_task_mock]
 
-    assert len(caplog.records) == 0
+    caplog.clear()
     worker.handle_sig(signal.SIGINT)
     await asyncio.sleep(0)
     assert len(caplog.records) == 1
