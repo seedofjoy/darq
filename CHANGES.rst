@@ -3,7 +3,7 @@
 Changelog
 ---------
 
-0.7.2 (unpublished)
+0.7.2 (2020-06-18)
 ...................
 * Fix some types (cron, OnJobPrepublishType)
 * ``on_job_prerun`` now runs before "task started" log and ``on_job_postrun`` now runs after "task finished" log

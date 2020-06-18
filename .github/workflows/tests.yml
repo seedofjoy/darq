@@ -10,6 +10,9 @@ jobs:
       matrix:
         python-version: [3.6, 3.7, 3.8]
 
+    env:
+      PYTHON: ${{ matrix.python-version }}
+
     services:
       redis:
         image: redis
@@ -44,8 +47,9 @@ jobs:
       run: pytest
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v1.0.7
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: ./coverage.xml
         fail_ci_if_error: true
+        env_vars: PYTHON
