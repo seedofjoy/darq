@@ -3,6 +3,10 @@
 Changelog
 ---------
 
+0.8.0 (unpublished)
+...................
+* **Breaking change**: Changed CLI command format. Before: ``darq some_project.darq_app.darq``. Now: ``darq -A some_project.darq_app.darq worker``
+
 0.7.2 (2020-06-18)
 ...................
 * Fix some types (cron, OnJobPrepublishType)

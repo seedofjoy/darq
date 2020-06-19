@@ -20,35 +20,45 @@ watch_help = 'Watch a directory and reload the worker upon changes.'
 verbose_help = 'Enable verbose output.'
 
 
-@click.command('darq')
+@click.group('darq')
+@click.pass_context
 @click.version_option(VERSION, '-V', '--version', prog_name='darq')
-@click.argument('darq-app', type=str, required=True)
-@click.option('--check', is_flag=True, help=health_check_help)
+@click.option('-A', '--app', type=str, required=True)
+@click.option('-v', '--verbose', is_flag=True, help=verbose_help)
+def cli(ctx: click.Context, *, app: str, verbose: bool) -> None:
+    """
+    Job queues in python with Asyncio and Redis.
+
+    CLI to run the Darq worker.
+
+    app - path to Darq app instance.
+    For example: someproject.darq.darq_app
+    """
+    sys.path.append(os.getcwd())
+    darq = import_string(app)
+    if not isinstance(darq, Darq):
+        raise click.BadArgumentUsage(
+            f'"APP" argument error. {darq!r} is not instance of {Darq!r}',
+        )
+
+    ctx.ensure_object(dict)
+    ctx.obj['darq'] = darq
+    logging.config.dictConfig(default_log_config(verbose))
+
+
+@cli.command()
+@click.pass_context
+@click.option('-Q', '--queue', type=str, default=None)
 @click.option(
     '--watch', type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help=watch_help,
 )
-@click.option('-v', '--verbose', is_flag=True, help=verbose_help)
-@click.option('-Q', '--queue', type=str, default=None)
-def cli(
-        *, darq_app: str, check: bool, watch: str, verbose: bool, queue: str,
-) -> None:
+@click.option('--check', is_flag=True, help=health_check_help)
+def worker(ctx: click.Context, *, queue: str, watch: str, check: bool) -> None:
     """
-    Job queues in python with asyncio and redis.
-
-    CLI to run the darq worker.
-
-    DARQ_APP - path to Darq app instance.
-    For example: someproject.darq.darq_app
+    CLI to run the Darq worker.
     """
-    sys.path.append(os.getcwd())
-    darq = import_string(darq_app)
-    if not isinstance(darq, Darq):
-        raise click.BadArgumentUsage(
-            f'DARQ_APP argument error. {darq!r} is not instance of {Darq!r}',
-        )
-
-    logging.config.dictConfig(default_log_config(verbose))
+    darq = ctx.obj['darq']
 
     overwrite_settings: t.Dict[str, t.Any] = {}
     if queue is not None:
