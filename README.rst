@@ -58,7 +58,7 @@ And start worker:
 
 .. code:: shell
 
-    python3 -m darq.cli some_project.darq_app.darq
+    python3 -m darq.cli -A some_project.darq_app.darq worker
 
 
 Worker output:
