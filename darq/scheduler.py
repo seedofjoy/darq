@@ -22,13 +22,15 @@ class Scheduler:
     """
 
     def __init__(self, app: 'Darq') -> None:
-        assert app.cron_jobs and len(app.cron_jobs) > 0, \
+        self.cron_jobs = app.cron_jobs
+        assert self.cron_jobs and len(self.cron_jobs) > 0, \
             'at least one cron_job must be registered'
 
         settings = app.worker_settings
         self.app = app
         self.burst = settings.burst
-        self.cron_jobs = app.cron_jobs
+        self.on_startup = app.on_scheduler_startup
+        self.on_shutdown = app.on_scheduler_shutdown
         self.poll_delay_s = to_seconds_strict(settings.poll_delay)
 
         self.pool: 'ArqRedis' = None  # type: ignore
@@ -66,6 +68,8 @@ class Scheduler:
         )
         self.pool = await create_pool(self.redis_settings)
         await self.app.connect(self.pool)
+        if self.on_startup:
+            await self.on_startup()
 
         async for _ in poll(self.poll_delay_s):
             await self.run_cron()
@@ -105,6 +109,8 @@ class Scheduler:
     async def close(self) -> None:
         if not self.pool:
             return
+        if self.on_shutdown:
+            await self.on_shutdown()
         await self.app.disconnect()
         self.pool.close()
         await self.pool.wait_closed()
