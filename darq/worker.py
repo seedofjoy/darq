@@ -39,6 +39,7 @@ from .utils import truncate
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from darq import Darq
+    from .connections import ArqRedis
 
 log = logging.getLogger('darq.worker')
 no_result = object()
@@ -220,12 +221,8 @@ class Worker:
         else:
             self.health_check_key = settings.health_check_key
 
-        if app.redis_pool:
-            self.pool = app.redis_pool
-            self.redis_settings: t.Optional[RedisSettings] = None
-        else:
-            self.pool = None  # type: ignore
-            self.redis_settings = app.redis_settings or RedisSettings()
+        self.pool: 'ArqRedis' = None  # type: ignore
+        self.redis_settings = app.redis_settings or RedisSettings()
 
         self.tasks: t.List[asyncio.Task[t.Any]] = []
         self.main_task: t.Optional[asyncio.Task[None]] = None
@@ -298,13 +295,11 @@ class Worker:
             return self.jobs_complete
 
     async def main(self) -> None:
-        if self.pool is None:
-            self.pool = await create_pool(self.redis_settings)
-
         log.info(
             'Starting worker for %d functions: %s',
             len(self.functions), ', '.join(self.functions),
         )
+        self.pool = await create_pool(self.redis_settings)
         await log_redis_info(self.pool, log.info)
         self.ctx['redis'] = self.pool
         await self.app.connect(self.pool)

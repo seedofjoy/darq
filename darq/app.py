@@ -45,7 +45,6 @@ class Darq:
 
     :param queue_name: queue name to get jobs from
     :param redis_settings: settings for creating a redis connection
-    :param redis_pool: existing redis pool, generally None
     :param burst: whether to stop the worker once all jobs have been run
     :param on_startup: coroutine function to run at worker startup
     :param on_shutdown: coroutine function to run at worker shutdown
@@ -81,7 +80,6 @@ class Darq:
             *,
             queue_name: str = default_queue_name,
             redis_settings: t.Optional[RedisSettings] = None,
-            redis_pool: t.Optional[ArqRedis] = None,
             burst: bool = False,
             on_startup: t.Callable[[CtxType], t.Awaitable[None]] = None,
             on_shutdown: t.Callable[[CtxType], t.Awaitable[None]] = None,
@@ -112,7 +110,7 @@ class Darq:
             max_burst_jobs=max_burst_jobs, job_serializer=job_serializer,
             job_deserializer=job_deserializer,
         )
-        self.redis_pool = redis_pool
+        self.redis_pool: 'ArqRedis' = None  # type: ignore
         self.redis_settings = redis_settings
         self.ctx = ctx
         self.on_startup = on_startup
