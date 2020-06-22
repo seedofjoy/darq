@@ -86,6 +86,8 @@ class Darq:
             on_job_prerun: t.Optional[OnJobPrerunType] = None,
             on_job_postrun: t.Optional[OnJobPostrunType] = None,
             on_job_prepublish: t.Optional[OnJobPrepublishType] = None,
+            on_scheduler_startup: t.Callable[[], t.Awaitable[None]] = None,
+            on_scheduler_shutdown: t.Callable[[], t.Awaitable[None]] = None,
             max_jobs: int = 10,
             job_timeout: SecondsTimedelta = 300,
             keep_result: SecondsTimedelta = 3600,
@@ -118,6 +120,8 @@ class Darq:
         self.on_job_prerun = on_job_prerun
         self.on_job_postrun = on_job_postrun
         self.on_job_prepublish = on_job_prepublish
+        self.on_scheduler_startup = on_scheduler_startup
+        self.on_scheduler_shutdown = on_scheduler_shutdown
         self.default_job_expires = default_job_expires
         self.cron_jobs: t.List[CronJob] = []
         self.registry = Registry()

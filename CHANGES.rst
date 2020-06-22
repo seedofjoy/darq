@@ -9,6 +9,7 @@ Changelog
 * **Breaking change**: Scheduler (cron jobs) now run's seperate from worker (see ``darq scheduler`` command)
 * **Breaking change**: Changed some function signatures (rename arguments)
 * **Breaking change**: Remove ``redis_pool`` param from ``Darq`` app
+* Add ``on_scheduler_startup`` and ``on_scheduler_shutdown`` callbacks
 
 0.7.2 (2020-06-18)
 ...................
