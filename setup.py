@@ -20,7 +20,7 @@ setuptools.setup(
     version=str(version.VERSION),
     author='Igor Mozharovsky',
     author_email='igor.mozharovsky@gmail.com',
-    description='A small wrapper around arq',
+    description='Async task manager with Celery-like features. Fork of arq.',
     long_description=long_description,
     long_description_content_type='text/x-rst',
     url='https://github.com/seedofjoy/darq',
