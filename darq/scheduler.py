@@ -9,8 +9,9 @@ from .utils import poll
 from .utils import to_seconds_strict
 from .utils import to_unix_ms
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from darq import Darq
+    from .connections import ArqRedis
 
 log = logging.getLogger('darq.scheduler')
 
@@ -30,12 +31,8 @@ class Scheduler:
         self.cron_jobs = app.cron_jobs
         self.poll_delay_s = to_seconds_strict(settings.poll_delay)
 
-        if app.redis_pool:
-            self.pool = app.redis_pool
-            self.redis_settings: t.Optional[RedisSettings] = None
-        else:
-            self.pool = None  # type: ignore
-            self.redis_settings = app.redis_settings or RedisSettings()
+        self.pool: 'ArqRedis' = None  # type: ignore
+        self.redis_settings = app.redis_settings or RedisSettings()
 
         self.main_task: t.Optional[asyncio.Task[None]] = None
         self.loop = asyncio.get_event_loop()
@@ -63,13 +60,11 @@ class Scheduler:
         await self.main_task
 
     async def main(self) -> None:
-        if self.pool is None:
-            self.pool = await create_pool(self.redis_settings)
-
         log.info(
             'Starting cron scheduler for %d cron jobs: \n%s',
             len(self.cron_jobs), '\n'.join(str(cj) for cj in self.cron_jobs),
         )
+        self.pool = await create_pool(self.redis_settings)
         await self.app.connect(self.pool)
 
         async for _ in poll(self.poll_delay_s):
