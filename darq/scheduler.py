@@ -5,6 +5,7 @@ from datetime import datetime
 
 from .connections import create_pool
 from .connections import RedisSettings
+from .types import AnyDict
 from .utils import poll
 from .utils import to_seconds_strict
 from .utils import to_unix_ms
@@ -38,6 +39,7 @@ class Scheduler:
 
         self.main_task: t.Optional[asyncio.Task[None]] = None
         self.loop = asyncio.get_event_loop()
+        self.scheduler_ctx: AnyDict = {}
 
     def run(self) -> None:
         """
@@ -67,9 +69,10 @@ class Scheduler:
             len(self.cron_jobs), '\n'.join(str(cj) for cj in self.cron_jobs),
         )
         self.pool = await create_pool(self.redis_settings)
+        self.scheduler_ctx['redis'] = self.pool
         await self.app.connect(self.pool)
         if self.on_startup:
-            await self.on_startup()
+            await self.on_startup(self.scheduler_ctx)
 
         async for _ in poll(self.poll_delay_s):
             await self.run_cron()
@@ -110,7 +113,7 @@ class Scheduler:
         if not self.pool:
             return
         if self.on_shutdown:
-            await self.on_shutdown()
+            await self.on_shutdown(self.scheduler_ctx)
         await self.app.disconnect()
         self.pool.close()
         await self.pool.wait_closed()

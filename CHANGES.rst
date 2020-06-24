@@ -3,8 +3,12 @@
 Changelog
 ---------
 
+0.9.0 (2020-06-24)
+..................
+* **Breaking change**: Add ``scheduler_ctx`` param to ``on_scheduler_startup`` and ``on_scheduler_shutdown`` to share data between this callbacks. It already has ``ctx['redis']`` - instance of ``ArqRedis``
+
 0.8.0 (2020-06-22)
-...................
+..................
 * **Breaking change**: Changed CLI command format. Before: ``darq some_project.darq_app.darq``. Now: ``darq -A some_project.darq_app.darq worker``
 * **Breaking change**: Scheduler (cron jobs) now run's seperate from worker (see ``darq scheduler`` command)
 * **Breaking change**: Changed some function signatures (rename arguments)
@@ -12,7 +16,7 @@ Changelog
 * Add ``on_scheduler_startup`` and ``on_scheduler_shutdown`` callbacks
 
 0.7.2 (2020-06-18)
-...................
+..................
 * Fix some types (cron, OnJobPrepublishType)
 * ``on_job_prerun`` now runs before "task started" log and ``on_job_postrun`` now runs after "task finished" log
 
