@@ -4,6 +4,7 @@ import pytest
 
 from darq import Darq
 from darq.app import DarqException
+from darq.connections import ArqRedis
 from darq.cron import cron
 from . import redis_settings
 from .test_app import assert_worker_job_finished
@@ -137,10 +138,14 @@ async def test_not_run(darq, worker_factory, caplog, arq_redis):
 async def test_startup_shutdown(arq_redis, scheduler_factory):
     calls = []
 
-    async def startup():
+    async def startup(scheduler_ctx):
+        scheduler_ctx['test'] = 123
+        assert isinstance(scheduler_ctx.get('redis'), ArqRedis)
         calls.append('startup')
 
-    async def shutdown():
+    async def shutdown(scheduler_ctx):
+        assert scheduler_ctx['test'] == 123
+        assert isinstance(scheduler_ctx.get('redis'), ArqRedis)
         calls.append('shutdown')
 
     darq = Darq(

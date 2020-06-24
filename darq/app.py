@@ -86,8 +86,10 @@ class Darq:
             on_job_prerun: t.Optional[OnJobPrerunType] = None,
             on_job_postrun: t.Optional[OnJobPostrunType] = None,
             on_job_prepublish: t.Optional[OnJobPrepublishType] = None,
-            on_scheduler_startup: t.Callable[[], t.Awaitable[None]] = None,
-            on_scheduler_shutdown: t.Callable[[], t.Awaitable[None]] = None,
+            on_scheduler_startup: t.Callable[
+                [CtxType], t.Awaitable[None]] = None,
+            on_scheduler_shutdown: t.Callable[
+                [CtxType], t.Awaitable[None]] = None,
             max_jobs: int = 10,
             job_timeout: SecondsTimedelta = 300,
             keep_result: SecondsTimedelta = 3600,
