@@ -9,9 +9,10 @@ else:
 
 if t.TYPE_CHECKING:  # pragma: no cover
     import darq
-    from darq.worker import Function  # noqa F401
+    from darq.worker import Task  # noqa F401
 
 AnyCallable = t.Callable[..., t.Any]
+CoroutineType = t.Callable[..., t.Awaitable[t.Any]]
 AnyTimedelta = t.Union[int, float, datetime.timedelta]
 AnyDict = t.Dict[t.Any, t.Any]
 DataDict = t.Dict[str, t.Any]
@@ -40,16 +41,16 @@ class JobEnqueueOptions(TypedDict):
 
 
 OnJobPrerunType = t.Callable[
-    [AnyDict, 'Function', ArgsType, KwargsType],
+    [AnyDict, 'Task', ArgsType, KwargsType],
     t.Awaitable[None],
 ]
 OnJobPostrunType = t.Callable[
-    [AnyDict, 'Function', ArgsType, KwargsType, t.Any],
+    [AnyDict, 'Task', ArgsType, KwargsType, t.Any],
     t.Awaitable[None],
 ]
 OnJobPrepublishType = t.Callable[
     [
-        DataDict, 'Function', MutableArgsType, MutableKwargsType,
+        DataDict, 'Task', MutableArgsType, MutableKwargsType,
         JobEnqueueOptions,
     ],
     t.Awaitable[None],

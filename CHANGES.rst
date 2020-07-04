@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.10.0 (unpublished)
+....................
+* **Breaking change**: Rename ``darq.worker.Function`` to ``darq.worker.Task``
+* Made ``job`` to ``task`` naming migration
+
 0.9.0 (2020-06-24)
 ..................
 * **Breaking change**: Add ``scheduler_ctx`` param to ``on_scheduler_startup`` and ``on_scheduler_shutdown`` to share data between this callbacks. It already has ``ctx['redis']`` - instance of ``ArqRedis``

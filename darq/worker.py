@@ -10,7 +10,6 @@ from time import time
 
 import async_timeout
 from aioredis import MultiExecError
-from pydantic.utils import import_string
 
 from .connections import create_pool
 from .connections import log_redis_info
@@ -27,6 +26,7 @@ from .jobs import JobResult
 from .jobs import SerializationError
 from .jobs import serialize_result
 from .jobs import Serializer
+from .types import CoroutineType
 from .utils import args_to_string
 from .utils import ms_to_datetime
 from .utils import poll
@@ -44,57 +44,29 @@ if t.TYPE_CHECKING:  # pragma: no cover
 log = logging.getLogger('darq.worker')
 no_result = object()
 
-CoroutineType = t.Callable[..., t.Awaitable[t.Any]]
 CtxType = t.Dict[t.Any, t.Any]
 
 
-@dataclasses.dataclass
-class Function:
+class Task(t.NamedTuple):
     name: str
     coroutine: CoroutineType
-    default_queue: t.Optional[str]
     timeout_s: t.Optional[float]
     keep_result_s: t.Optional[float]
     max_tries: t.Optional[int]
 
-
-def func(
-        coroutine: t.Union[str, Function, CoroutineType],
-        *,
-        name: t.Optional[str] = None,
-        default_queue: t.Optional[str] = None,
-        keep_result: t.Optional[SecondsTimedelta] = None,
+    @classmethod
+    def new(
+        cls,
+        name: str,
+        coroutine: CoroutineType,
         timeout: t.Optional[SecondsTimedelta] = None,
+        keep_result: t.Optional[SecondsTimedelta] = None,
         max_tries: t.Optional[int] = None,
-) -> Function:
-    """
-    Wrapper for a job function which lets you configure more settings.
-
-    :param coroutine: coroutine function to call, can be a string to import
-    :param name: name for function, if None, ``coroutine.__qualname__`` is used
-    :param keep_result: duration to keep the result for, if 0 the result
-                        is not kept
-    :param timeout: maximum time the job should take
-    :param max_tries: maximum number of tries allowed for the function,
-                      use 1 to prevent retrying
-    """
-    if isinstance(coroutine, Function):
-        return coroutine
-    elif isinstance(coroutine, str):
-        name = name or coroutine
-        coroutine = import_string(coroutine)
-
-    coroutine = t.cast(CoroutineType, coroutine)
-    assert asyncio.iscoroutinefunction(coroutine), \
-        f'{coroutine} is not a coroutine function'
-    timeout = to_seconds(timeout)
-    keep_result = to_seconds(keep_result)
-
-    return Function(
-        name=name or coroutine.__qualname__, coroutine=coroutine,
-        default_queue=default_queue, timeout_s=timeout,
-        keep_result_s=keep_result, max_tries=max_tries,
-    )
+    ) -> 'Task':
+        return cls(
+            name=name, coroutine=coroutine, timeout_s=to_seconds(timeout),
+            keep_result_s=to_seconds(keep_result), max_tries=max_tries,
+        )
 
 
 class Retry(RuntimeError):
@@ -194,7 +166,7 @@ class Worker:
     ) -> None:
         settings = dataclasses.replace(app.worker_settings, **replace_kwargs)
         self.app = app
-        self.functions: t.Dict[str, Function] = dict(app.registry)
+        self.functions: t.Dict[str, Task] = dict(app.registry)
         self.queue_name = settings.queue_name
 
         assert len(self.functions) > 0, \

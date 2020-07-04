@@ -15,7 +15,6 @@ from darq.jobs import Job
 from darq.jobs import JobDef
 from darq.jobs import SerializationError
 from darq.utils import timestamp_ms
-from darq.worker import func
 from darq.worker import Retry
 from darq.worker import Worker
 
@@ -138,33 +137,43 @@ async def test_mung(darq, arq_redis, worker_factory):
     assert counter.most_common(1)[0][1] == 1  # no job go enqueued twice
 
 
-@pytest.mark.skip(reason='Jobs with "ctx" does not ready')
-async def test_custom_try(arq_redis, worker_factory):
-    async def foobar(ctx):
-        return ctx['job_try']
+async def foobar_with_ctx(ctx):
+    return ctx['job_try']
 
-    j1 = await arq_redis.enqueue_job('foobar')
-    w = worker_factory(functions=[func(foobar, name='foobar')])
-    await w.main()
+
+@pytest.mark.skip(reason='Jobs with "ctx" does not ready')
+async def test_custom_try(darq, arq_redis, worker_factory):
+    darq.task(foobar_with_ctx)
+
+    j1 = await arq_redis.enqueue_job('tests.test_main.foobar_with_ctx')
+    worker = worker_factory(darq)
+    await worker.main()
     r = await j1.result(pole_delay=0)
     assert r == 1
 
-    j2 = await arq_redis.enqueue_job('foobar', job_try=3)
-    await w.main()
+    j2 = await arq_redis.enqueue_job(
+        'tests.test_main.foobar_with_ctx', job_try=3,
+    )
+    await worker.main()
     r = await j2.result(pole_delay=0)
     assert r == 3
 
 
-@pytest.mark.skip(reason='Jobs with "ctx" does not ready')
-async def test_custom_try2(arq_redis, worker_factory):
-    async def foobar(ctx):
-        if ctx['job_try'] == 3:
-            raise Retry()
-        return ctx['job_try']
+async def foobar_ctx_job_try(ctx):
+    if ctx['job_try'] == 3:
+        raise Retry()
+    return ctx['job_try']
 
-    j1 = await arq_redis.enqueue_job('foobar', job_try=3)
-    w = worker_factory(functions=[func(foobar, name='foobar')])
-    await w.main()
+
+@pytest.mark.skip(reason='Jobs with "ctx" does not ready')
+async def test_custom_try2(darq, arq_redis, worker_factory):
+    darq.task(foobar_ctx_job_try)
+
+    j1 = await arq_redis.enqueue_job(
+        'tests.test_main.foobar_ctx_job_try', job_try=3,
+    )
+    worker = worker_factory(darq)
+    await worker.main()
     r = await j1.result(pole_delay=0)
     assert r == 4
 
