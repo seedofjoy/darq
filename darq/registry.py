@@ -4,18 +4,18 @@ from collections import UserDict
 from . import worker
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    BaseRegistry = UserDict[str, worker.Function]
+    BaseRegistry = UserDict[str, worker.Task]
 else:
     BaseRegistry = UserDict
 
 
 class Registry(BaseRegistry):
 
-    def add(self, arq_function: 'worker.Function') -> None:
-        self[arq_function.name] = arq_function
+    def add(self, task: 'worker.Task') -> None:
+        self[task.name] = task
 
-    def get_functions(self) -> t.Sequence['worker.Function']:
+    def get_functions(self) -> t.Sequence['worker.Task']:
         return tuple(self.values())
 
     def get_function_names(self) -> t.Sequence[str]:
-        return tuple(arq_func.name for arq_func in self.values())
+        return tuple(task.name for task in self.values())

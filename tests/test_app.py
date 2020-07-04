@@ -9,7 +9,7 @@ from asynctest import patch
 from darq import Darq
 from darq.app import DarqConnectionError
 from darq.connections import ArqRedis
-from darq.worker import Function
+from darq.worker import Task
 from . import redis_settings
 
 
@@ -113,14 +113,14 @@ async def test_task_parametrized(darq):
         max_tries=max_tries, queue=queue,
     )(foobar)
 
-    func_name = 'tests.test_app.foobar'
+    task_name = 'tests.test_app.foobar'
     assert len(darq.registry) == 1
-    arq_func = darq.registry.get(func_name)
-    assert isinstance(arq_func, Function)
-    assert arq_func.name == func_name
-    assert arq_func.coroutine == foobar_task
-    assert arq_func.timeout_s == timeout
-    assert arq_func.keep_result_s == keep_result
+    task = darq.registry.get(task_name)
+    assert isinstance(task, Task)
+    assert task.name == task_name
+    assert task.coroutine == foobar_task
+    assert task.timeout_s == timeout
+    assert task.keep_result_s == keep_result
 
 
 async def test_task_self_enqueue(darq, caplog, worker_factory):
@@ -155,10 +155,10 @@ async def test_on_job_callbacks(
     expected_metadata = {'test_var': 'ok'}
 
     async def prepublish_side_effect(
-            metadata, arq_function, args, kwargs, job_options,
+            metadata, task, args, kwargs, job_options,
     ):
         metadata.update(expected_metadata)
-        assert isinstance(arq_function, Function)
+        assert isinstance(task, Task)
         assert args == list(func_args)
         assert kwargs == func_kwargs
         assert job_options == {
@@ -207,11 +207,11 @@ async def test_on_job_callbacks(
 
     on_job_prerun.assert_called_once()
     call_args = on_job_prerun.call_args[0]
-    assert len(call_args) == 4  # ctx, arq_function, args, kwargs
+    assert len(call_args) == 4  # ctx, task, args, kwargs
     ctx = call_args[0]
     assert_is_ctx(ctx)
     assert ctx['metadata'] == expected_metadata
-    assert isinstance(call_args[1], Function)
+    assert isinstance(call_args[1], Task)
     assert call_args[1].name == function_name
     assert call_args[1].coroutine == foobar_task
     assert call_args[2] == func_args
@@ -219,11 +219,11 @@ async def test_on_job_callbacks(
 
     on_job_postrun.assert_called_once()
     call_args = on_job_postrun.call_args[0]
-    assert len(call_args) == 5  # ctx, arq_function, args, kwargs, result
+    assert len(call_args) == 5  # ctx, task, args, kwargs, result
     ctx = call_args[0]
     assert_is_ctx(ctx)
     assert ctx['metadata'] == expected_metadata
-    assert isinstance(call_args[1], Function)
+    assert isinstance(call_args[1], Task)
     assert call_args[1].name == function_name
     assert call_args[1].coroutine == foobar_task
     assert call_args[2] == func_args
