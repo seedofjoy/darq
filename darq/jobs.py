@@ -21,7 +21,7 @@ from .utils import ms_to_datetime
 from .utils import poll
 from .utils import timestamp_ms
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from .connections import ArqRedis
 
 log = logging.getLogger('darq.jobs')

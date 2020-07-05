@@ -1,3 +1,6 @@
+import re
+from unittest.mock import patch
+
 from aiohttp.test_utils import loop_context
 from click.testing import CliRunner
 
@@ -30,6 +33,18 @@ def test_worker_run():
     assert cli_output in result.output
 
 
+def test_app_bad_argument():
+    runner = CliRunner()
+    with loop_context():
+        result = runner.invoke(cli, ['-A', 'tests.test_cli.foobar', 'worker'])
+    assert result.exit_code == 2
+    cli_output_re = (
+        r'Error: "APP" argument error\. <function foobar at .*> is not '
+        r'instance of <class \'darq\.app\.Darq\'>'
+    )
+    assert re.search(cli_output_re, result.output)
+
+
 def test_worker_check():
     runner = CliRunner()
     with loop_context():
@@ -39,6 +54,18 @@ def test_worker_check():
     assert result.exit_code == 1
     expected = 'Health check failed: no health check sentinel value found'
     assert expected in result.output
+
+
+@patch('darq.worker.Worker')
+def test_worker_queue(worker_mock):
+    runner = CliRunner()
+    custom_queue_name = 'my_queue'
+    with loop_context():
+        result = runner.invoke(cli, [
+            '-A', 'tests.test_cli.darq', 'worker', '--queue', custom_queue_name,
+        ])
+    assert result.exit_code == 0
+    worker_mock.assert_called_once_with(darq, queue_name=custom_queue_name)
 
 
 async def mock_awatch():

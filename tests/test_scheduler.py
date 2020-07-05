@@ -37,6 +37,10 @@ async def test_add_cron_jobs(
         cron(foobar_task, name='custom_name2', run_at_startup=True),
     )
 
+    with pytest.raises(DarqException):
+        # is not CronJob instance
+        darq.add_cron_jobs(foobar_task)
+
     scheduler = scheduler_factory(darq)
     await scheduler.main()
     worker = worker_factory(darq)
