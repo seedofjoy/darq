@@ -1,6 +1,7 @@
 import datetime
 import logging
 import re
+from unittest.mock import call
 
 import pytest
 from asynctest import CoroutineMock
@@ -57,6 +58,7 @@ async def cron_func():
 
 async def test_darq_connect_disconnect(darq):
     assert darq.redis_pool is None
+    await darq.disconnect()  # should not fail
 
     await darq.connect()
     assert isinstance(darq.redis_pool, ArqRedis)
@@ -313,3 +315,15 @@ async def test_task_queue(
     job = await foobar_task.apply_async([], {}, queue=apply_async_queue)
     assert job._queue_name == expected
     await darq.disconnect()
+
+
+@pytest.mark.parametrize('packages', [
+    (['some.package']),
+    (['some.package', 'another.package']),
+])
+@patch('darq.app.importlib.import_module')
+def test_autodiscover_tasks(import_module_mock, darq, packages):
+    darq.autodiscover_tasks(packages)
+    assert import_module_mock.call_count == len(packages)
+    calls = [call(p) for p in packages]
+    import_module_mock.assert_has_calls(calls)
