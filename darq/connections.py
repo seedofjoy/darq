@@ -163,7 +163,7 @@ class ArqRedis(Redis):
             tr.zadd(queue_name, score, job_id)
             try:
                 await tr.execute()
-            except MultiExecError:
+            except MultiExecError:  # pragma: no cover
                 # job got enqueued since we checked 'job_exists'
                 # https://github.com/samuelcolvin/arq/issues/131
                 # avoid warnings in log
