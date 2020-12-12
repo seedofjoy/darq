@@ -13,4 +13,4 @@ flake8-import-order==0.18.1
 flake8-print==4.0.0
 flake8-commas==2.0.0
 typing_extensions==3.7.4  # pyup: ignore # it should be minimal version from setup.py
-msgpack==1.0.0
+msgpack==1.0.1
