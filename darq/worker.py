@@ -342,7 +342,7 @@ class Worker:
                 tr.setex(in_progress_key, self.in_progress_timeout_s, b'1')
                 try:
                     await tr.execute()
-                except MultiExecError:
+                except MultiExecError:  # pragma: no cover
                     # job already started elsewhere since we got 'existing'
                     self.sem.release()
                     log.debug(
