@@ -1,6 +1,6 @@
 pytest==6.2.4
 pytest-aiohttp==0.3.0
-pytest-mock==3.5.1
+pytest-mock==3.6.1
 pytest-toolbox==0.4
 pytest-cov==2.11.1
 asynctest==0.13.0
