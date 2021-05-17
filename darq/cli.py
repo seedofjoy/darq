@@ -21,9 +21,13 @@ watch_help = 'Watch a directory and reload the worker upon changes.'
 verbose_help = 'Enable verbose output.'
 
 
+class ContextObject(t.NamedTuple):
+    darq: Darq
+
+
 @click.group('darq')
 @click.pass_context
-@click.version_option(VERSION, '-V', '--version', prog_name='darq')
+@click.version_option(str(VERSION), '-V', '--version', prog_name='darq')
 @click.option('-A', '--app', type=str, required=True)
 @click.option('-v', '--verbose', is_flag=True, help=verbose_help)
 def cli(ctx: click.Context, *, app: str, verbose: bool) -> None:
@@ -42,24 +46,25 @@ def cli(ctx: click.Context, *, app: str, verbose: bool) -> None:
             f'"APP" argument error. {darq!r} is not instance of {Darq!r}',
         )
 
-    ctx.ensure_object(dict)
-    ctx.obj['darq'] = darq
+    ctx.obj = ContextObject(darq)
     logging.config.dictConfig(default_log_config(verbose))
 
 
 @cli.command()
-@click.pass_context
+@click.pass_obj
 @click.option('-Q', '--queue', type=str, default=None)
 @click.option(
     '--watch', type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help=watch_help,
 )
 @click.option('--check', is_flag=True, help=health_check_help)
-def worker(ctx: click.Context, *, queue: str, watch: str, check: bool) -> None:
+def worker(
+        ctx_obj: ContextObject, *, queue: str, watch: str, check: bool,
+) -> None:
     """
     CLI to run the Darq worker.
     """
-    darq = ctx.obj['darq']
+    darq = ctx_obj.darq
 
     overwrite_settings: t.Dict[str, t.Any] = {}
     if queue is not None:
@@ -78,12 +83,12 @@ def worker(ctx: click.Context, *, queue: str, watch: str, check: bool) -> None:
 
 
 @cli.command()
-@click.pass_context
-def scheduler(ctx: click.Context) -> None:
+@click.pass_obj
+def scheduler(ctx_obj: ContextObject) -> None:
     """
     CLI to run the scheduler (cron jobs)
     """
-    darq = ctx.obj['darq']
+    darq = ctx_obj.darq
     run_scheduler(darq)
 
 
