@@ -7,7 +7,7 @@ Changelog
 ....................
 * **Breaking change**: Rename ``darq.worker.Function`` to ``darq.worker.Task``
 * Made ``job`` to ``task`` naming migration
-* Add max_jobs parameter to CLI
+* Add max_jobs parameter to CLI (thanks to `@antonmyronyuk <https://github.com/antonmyronyuk>`_)
 
 0.9.0 (2020-06-24)
 ..................
