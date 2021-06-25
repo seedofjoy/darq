@@ -53,13 +53,19 @@ def cli(ctx: click.Context, *, app: str, verbose: bool) -> None:
 @cli.command()
 @click.pass_obj
 @click.option('-Q', '--queue', type=str, default=None)
+@click.option('--max-jobs', type=int, default=None)
 @click.option(
     '--watch', type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help=watch_help,
 )
 @click.option('--check', is_flag=True, help=health_check_help)
 def worker(
-        ctx_obj: ContextObject, *, queue: str, watch: str, check: bool,
+        ctx_obj: ContextObject,
+        *,
+        queue: str,
+        max_jobs: int,
+        watch: str,
+        check: bool,
 ) -> None:
     """
     CLI to run the Darq worker.
@@ -69,6 +75,8 @@ def worker(
     overwrite_settings: t.Dict[str, t.Any] = {}
     if queue is not None:
         overwrite_settings['queue_name'] = queue
+    if max_jobs is not None:
+        overwrite_settings['max_jobs'] = max_jobs
 
     if check:
         exit(check_health(darq, queue))
