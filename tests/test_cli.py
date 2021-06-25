@@ -68,6 +68,18 @@ def test_worker_queue(worker_mock):
     worker_mock.assert_called_once_with(darq, queue_name=custom_queue_name)
 
 
+@patch('darq.worker.Worker')
+def test_worker_max_jobs(worker_mock):
+    runner = CliRunner()
+    max_jobs = 7
+    with loop_context():
+        result = runner.invoke(cli, [
+            '-A', 'tests.test_cli.darq', 'worker', '--max-jobs', max_jobs,
+        ])
+    assert result.exit_code == 0
+    worker_mock.assert_called_once_with(darq, max_jobs=max_jobs)
+
+
 async def mock_awatch():
     yield [1]
 
