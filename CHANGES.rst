@@ -8,6 +8,7 @@ Changelog
 * **Breaking change**: Rename ``darq.worker.Function`` to ``darq.worker.Task``
 * Made ``job`` to ``task`` naming migration
 * Add max_jobs parameter to CLI (thanks to `@antonmyronyuk <https://github.com/antonmyronyuk>`_)
+* Fixed bug with ``expires`` argument: ``default_job_expires`` could not be replaced with ``None`` in ``@task`` or ``.apply_async``
 
 0.9.0 (2020-06-24)
 ..................

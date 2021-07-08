@@ -19,6 +19,8 @@ from .types import JobEnqueueOptions
 from .types import OnJobPostrunType
 from .types import OnJobPrepublishType
 from .types import OnJobPrerunType
+from .types import UNSET_ARG
+from .types import unset_arg
 from .utils import get_function_name
 from .utils import SecondsTimedelta
 from .worker import Task
@@ -174,7 +176,7 @@ class Darq:
             timeout: t.Optional[AnyTimedelta] = None,
             max_tries: t.Optional[int] = None,
             queue: t.Optional[str] = None,
-            expires: t.Optional[AnyTimedelta] = None,
+            expires: t.Union[None, AnyTimedelta, UNSET_ARG] = unset_arg,
     ) -> t.Any:
         """
         :param func: coroutine function
@@ -204,7 +206,7 @@ class Darq:
                     queue: t.Optional[str] = None,
                     defer_until: t.Optional[datetime.datetime] = None,
                     defer_by: t.Optional[AnyTimedelta] = None,
-                    expires: t.Optional[AnyTimedelta] = None,
+                    expires: t.Union[None, AnyTimedelta, UNSET_ARG] = unset_arg,
                     job_try: t.Optional[int] = None,
             ) -> t.Optional[Job]:
                 """
@@ -227,7 +229,14 @@ class Darq:
                 args = list(args) if args is not None else []
                 kwargs = dict(kwargs) if kwargs is not None else {}
                 queue = queue or task_queue
-                expires = expires or task_expires or self.default_job_expires
+
+                if expires is unset_arg:
+                    expires = (
+                        task_expires
+                        if task_expires is not unset_arg
+                        else self.default_job_expires
+                    )
+                expires = t.cast(t.Optional[AnyTimedelta], expires)
 
                 if not self.redis_pool:
                     raise DarqConnectionError(
