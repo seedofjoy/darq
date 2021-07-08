@@ -327,3 +327,61 @@ def test_autodiscover_tasks(import_module_mock, darq, packages):
     assert import_module_mock.call_count == len(packages)
     calls = [call(p) for p in packages]
     import_module_mock.assert_has_calls(calls)
+
+
+@pytest.mark.parametrize(
+    'darq_kwargs, task_kwargs, apply_async_kwargs,'
+    'expected_kwargs', [
+        (
+            {}, {}, {},
+            {
+                'defer_by': None, 'defer_until': None, 'job_id': None,
+                'job_try': None, 'queue_name': None,
+                'expires': datetime.timedelta(days=1),
+            },
+        ),
+        (
+            {'default_job_expires': None}, {}, {},
+            {
+                'defer_by': None, 'defer_until': None, 'job_id': None,
+                'job_try': None, 'queue_name': None,
+                'expires': None,
+            },
+        ),
+        (
+            {}, {'expires': None}, {},
+            {
+                'defer_by': None, 'defer_until': None, 'job_id': None,
+                'job_try': None, 'queue_name': None,
+                'expires': None,
+            },
+        ),
+        (
+            {}, {'expires': 111}, {'expires': 222},
+            {
+                'defer_by': None, 'defer_until': None, 'job_id': None,
+                'job_try': None, 'queue_name': None,
+                'expires': 222,
+            },
+        ),
+    ],
+)
+@patch('darq.connections.ArqRedis.enqueue_job')
+async def test_expires_param(
+        enqueue_job_patched,
+        darq_kwargs, task_kwargs, apply_async_kwargs,
+        expected_kwargs,
+        arq_redis,
+):
+    enqueue_job_patched.reset_mock()
+
+    darq = Darq(redis_settings=redis_settings, **darq_kwargs)
+    foobar_task = darq.task(foobar, **task_kwargs)
+    await darq.connect()
+    await foobar_task.apply_async(tuple(), {}, **apply_async_kwargs)
+
+    enqueue_job_patched.assert_called_once_with(
+        'tests.test_app.foobar', tuple(), {},
+        **expected_kwargs,
+    )
+    await darq.disconnect()

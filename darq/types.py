@@ -21,6 +21,9 @@ KwargsType = t.Mapping[str, t.Any]
 MutableArgsType = t.List[t.Any]
 MutableKwargsType = t.Dict[str, t.Any]
 
+UNSET_ARG = t.NewType('UNSET_ARG', object)
+unset_arg: UNSET_ARG = UNSET_ARG(object())
+
 
 class JobCtx(TypedDict):
     redis: 'darq.connections.ArqRedis'
