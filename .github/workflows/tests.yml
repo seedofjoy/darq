@@ -35,7 +35,10 @@ jobs:
         pip install -e .[watch]
 
     - name: Lint with mypy
-      run: mypy darq/
+      run: |
+        if [ "$PYTHON" != "3.6" ]; then
+            mypy darq/
+        fi
 
     - name: Lint with flake8
       run: flake8
