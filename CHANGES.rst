@@ -3,7 +3,7 @@
 Changelog
 ---------
 
-0.10.0 (unpublished)
+0.10.0 (2021-07-09)
 ....................
 * **Breaking change**: Rename ``darq.worker.Function`` to ``darq.worker.Task``
 * Made ``job`` to ``task`` naming migration
