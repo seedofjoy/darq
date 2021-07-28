@@ -56,6 +56,7 @@ class RedisSettings:
 
     sentinel: bool = False
     sentinel_master: str = 'mymaster'
+    sentinel_timeout: float = 0.2
 
     def __repr__(self) -> str:
         return '<RedisSettings {}>'.format(
@@ -240,7 +241,9 @@ async def create_pool(
                 *args: Any, **kwargs: Any,
         ) -> aioredis.sentinel.pool.SentinelPool:
             client = await aioredis.sentinel.create_sentinel_pool(
-                *args, ssl=t.cast(RedisSettings, settings).ssl, **kwargs,
+                *args,
+                timeout=t.cast(RedisSettings, settings).sentinel_timeout,
+                **kwargs,
             )
             return client.master_for(
                 t.cast(RedisSettings, settings).sentinel_master,
@@ -249,14 +252,14 @@ async def create_pool(
     else:
         pool_factory = functools.partial(
             aioredis.create_pool,
-            create_connection_timeout=settings.conn_timeout, ssl=settings.ssl,
+            create_connection_timeout=settings.conn_timeout,
         )
         addr = t.cast(str, settings.host), settings.port
 
     try:
         pool = await pool_factory(
             addr, db=settings.database, password=settings.password,
-            encoding='utf8',
+            ssl=settings.ssl, encoding='utf8',
         )
         pool = ArqRedis(
             pool,
