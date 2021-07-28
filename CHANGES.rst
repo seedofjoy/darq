@@ -3,8 +3,12 @@
 Changelog
 ---------
 
+0.10.1 (2021-07-29)
+...................
+* Add ``sentinel_timeout`` (defaults to 0.2) param to ``RedisSettings``
+
 0.10.0 (2021-07-09)
-....................
+...................
 * **Breaking change**: Rename ``darq.worker.Function`` to ``darq.worker.Task``
 * Made ``job`` to ``task`` naming migration
 * Add max_jobs parameter to CLI (thanks to `@antonmyronyuk <https://github.com/antonmyronyuk>`_)
