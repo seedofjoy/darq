@@ -1,0 +1,24 @@
+version: '3'
+services:
+  redis:
+    image: redis
+
+  base-app: &base-app
+    build:
+      context: .
+    volumes:
+      - .:/work:delegated
+    depends_on:
+      - redis
+    working_dir: /work
+    tty: true
+
+  aiohttp:
+    <<: *base-app
+    ports:
+      - 8080:8080
+    command: python3 -m aiohttp.web -H 0.0.0.0 aiohttp_example.app:init_app
+
+  darq:
+    <<: *base-app
+    command: darq -A aiohttp_example.darq.darq worker
