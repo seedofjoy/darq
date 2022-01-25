@@ -54,7 +54,9 @@ async def fails():
     raise TypeError('my type error')
 
 
-async def test_handle_sig_delayed(darq, caplog, arq_redis, worker_factory):
+async def test_handle_sig_delayed(
+        darq, caplog, arq_redis, worker_factory, loop,
+):
     darq.task(foobar)
     caplog.set_level(logging.INFO)
 
@@ -67,13 +69,23 @@ async def test_handle_sig_delayed(darq, caplog, arq_redis, worker_factory):
         long_running_task_mock,
     ]
 
-    assert len(caplog.records) == 0
+    assert len(caplog.records) == 0 or len(caplog.records) == 2
+    if len(caplog.records) == 2:
+        assert all(
+            'Task was destroyed but it is pending!' in record.message
+            for record in caplog.records
+        )
     worker.handle_sig(signal.SIGINT)
     await asyncio.sleep(0)
-    assert len(caplog.records) == 1
-    assert caplog.records[0].message == (
+    assert len(caplog.records) == 1 or len(caplog.records) == 3
+    assert caplog.records[-1].message == (
         'Warm shutdown. Awaiting for 1 jobs with 30 seconds timeout.'
     )
+    if len(caplog.records) == 3:
+        assert all(
+            'Task was destroyed but it is pending!' in record.message
+            for record in caplog.records[:2]
+        )
     assert worker.main_task.cancel.call_count == 0
     assert worker.tasks[0].cancel.call_count == 0
     assert worker.tasks[1].cancel.call_count == 0
@@ -82,7 +94,7 @@ async def test_handle_sig_delayed(darq, caplog, arq_redis, worker_factory):
     worker.tasks[1].done.return_value = True
     await asyncio.sleep(1)
 
-    assert 'shutdown on SIGINT' in caplog.records[1].message
+    assert 'shutdown on SIGINT' in caplog.records[-1].message
     assert worker.main_task.cancel.call_count == 1
     assert worker.tasks[0].cancel.call_count == 0
     assert worker.tasks[1].cancel.call_count == 0
@@ -112,10 +124,10 @@ async def test_handle_sig_hard(darq, caplog, worker_factory):
     )
 
 
-def test_no_jobs(darq, arq_redis, loop):
+def test_no_jobs(darq, arq_redis, event_loop):
     darq.task(foobar)
 
-    loop.run_until_complete(
+    event_loop.run_until_complete(
         arq_redis.enqueue_job('tests.test_worker.foobar', [], {}),
     )
     with loop_context():
@@ -847,6 +859,7 @@ async def test_max_bursts_multiple(darq, arq_redis, worker_factory, caplog):
     await darq.connect()
 
     await foo_task.delay(1)
+    await asyncio.sleep(0.005)
     await foo_task.delay(2)
     worker = worker_factory(darq)
     assert await worker.run_check(max_burst_jobs=1) == 1
@@ -872,7 +885,7 @@ async def test_max_bursts_dont_get(darq, arq_redis, worker_factory):
     assert len(worker.tasks) == 0
 
 
-async def test_non_burst(darq, arq_redis, worker_factory, caplog, loop):
+async def test_non_burst(darq, arq_redis, worker_factory, caplog, event_loop):
     caplog.set_level(logging.INFO)
     foo_task = darq.task(foo)
     await darq.connect()
@@ -880,7 +893,7 @@ async def test_non_burst(darq, arq_redis, worker_factory, caplog, loop):
     await foo_task.apply_async([1], {}, job_id='testing')
     worker = worker_factory(darq)
     worker.burst = False
-    t = loop.create_task(worker.main())
+    t = event_loop.create_task(worker.main())
     await asyncio.sleep(0.1)
     t.cancel()
     assert worker.jobs_complete == 1
