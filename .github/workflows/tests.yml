@@ -8,7 +8,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: [3.6, 3.7.7, 3.8, 3.9]
+        python-version: [3.7.7, 3.8, 3.9]
 
     env:
       PYTHON: ${{ matrix.python-version }}
@@ -35,10 +35,7 @@ jobs:
         pip install -e .[watch]
 
     - name: Lint with mypy
-      run: |
-        if [ "$PYTHON" != "3.6" ]; then
-            mypy darq/
-        fi
+      run: mypy darq/
 
     - name: Lint with flake8
       run: flake8

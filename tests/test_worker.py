@@ -3,7 +3,6 @@ import functools
 import logging
 import re
 import signal
-import sys
 from unittest.mock import MagicMock
 
 import msgpack
@@ -377,10 +376,7 @@ async def test_job_expired_run_check(darq, arq_redis, worker_factory, caplog):
         await worker.run_check()
 
     exc_value = exc_info.value
-    assert str(exc_value) in {
-        "1 job failed JobExecutionFailed('job expired',)",  # python 3.6
-        "1 job failed JobExecutionFailed('job expired')",  # python 3.7
-    }
+    assert str(exc_value) == "1 job failed JobExecutionFailed('job expired')"
     assert exc_value.count == 1
     assert len(exc_value.job_results) == 1
     assert exc_value.job_results[0].result == JobExecutionFailed('job expired')
@@ -770,9 +766,6 @@ class UnpickleFails:
         raise ValueError('this broke')
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 7), reason='repr(exc) is ugly in 3.6',
-)
 async def test_deserialization_error(darq, arq_redis, worker_factory):
     darq.task(foobar)
     await arq_redis.enqueue_job(
