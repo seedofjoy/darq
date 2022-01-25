@@ -40,11 +40,11 @@ setuptools.setup(
         'console_scripts': ['darq = darq.cli:cli'],
     },
     install_requires=[
-        'async-timeout>=3.0.0, <4.0',
+        'async-timeout>=3.0.0, <5.0',
         'aioredis>=1.1.0, <2.0',
         'click>=6.7',
         'pydantic>=0.20',
-        'typing_extensions>=3.7.4; python_version<"3.8"',
+        'typing_extensions>=4.0; python_version<"3.8"',
     ],
     extras_require={
         'watch': ['watchgod>=0.4'],
