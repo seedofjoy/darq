@@ -69,22 +69,20 @@ async def test_handle_sig_delayed(
         long_running_task_mock,
     ]
 
-    assert len(caplog.records) == 0 or len(caplog.records) == 2
-    if len(caplog.records) == 2:
+    if caplog.records:
         assert all(
             'Task was destroyed but it is pending!' in record.message
             for record in caplog.records
         )
     worker.handle_sig(signal.SIGINT)
     await asyncio.sleep(0)
-    assert len(caplog.records) == 1 or len(caplog.records) == 3
     assert caplog.records[-1].message == (
         'Warm shutdown. Awaiting for 1 jobs with 30 seconds timeout.'
     )
-    if len(caplog.records) == 3:
+    if len(caplog.records) > 1:
         assert all(
             'Task was destroyed but it is pending!' in record.message
-            for record in caplog.records[:2]
+            for record in caplog.records[:-1]
         )
     assert worker.main_task.cancel.call_count == 0
     assert worker.tasks[0].cancel.call_count == 0

@@ -34,7 +34,7 @@ class Scheduler:
         self.on_shutdown = app.on_scheduler_shutdown
         self.poll_delay_s = to_seconds_strict(settings.poll_delay)
 
-        self.pool: 'ArqRedis' = None  # type: ignore
+        self.pool: 'ArqRedis' = None  # type: ignore[assignment]
         self.redis_settings = app.redis_settings or RedisSettings()
 
         self.main_task: t.Optional[asyncio.Task[None]] = None
@@ -102,7 +102,7 @@ class Scheduler:
                     'Scheduler: Sending due task %s (%s)',
                     cron_job.name, job_id,
                 )
-                job_futures.add(cron_job.task.apply_async(  # type: ignore
+                job_futures.add(cron_job.task.apply_async(
                     job_id=job_id,
                 ))
                 cron_job.set_next(n)
@@ -117,7 +117,7 @@ class Scheduler:
         await self.app.disconnect()
         self.pool.close()
         await self.pool.wait_closed()
-        self.pool = None  # type: ignore
+        self.pool = None  # type: ignore[assignment]
 
     def __repr__(self) -> str:
         return f'<Scheduler cron_jobs={len(self.cron_jobs)}>'

@@ -3,6 +3,10 @@
 Changelog
 ---------
 
+(unreleased)
+............
+* Add proper typing for functions wrapped with the @task decorator. Mypy will now check that parameters are passed correctly when calling ``func()`` and ``func.delay()``
+
 0.10.1 (2021-07-29)
 ...................
 * Add ``sentinel_timeout`` (defaults to 0.2) param to ``RedisSettings``

@@ -13,7 +13,7 @@ from .jobs import Job
 from .jobs import Serializer
 from .registry import Registry
 from .types import AnyTimedelta
-from .types import CoroutineType
+from .types import DarqTask
 from .types import DataDict
 from .types import JobEnqueueOptions
 from .types import OnJobPostrunType
@@ -21,6 +21,7 @@ from .types import OnJobPrepublishType
 from .types import OnJobPrerunType
 from .types import UNSET_ARG
 from .types import unset_arg
+from .types import WrappingFunc
 from .utils import get_function_name
 from .utils import SecondsTimedelta
 from .worker import Task
@@ -117,7 +118,7 @@ class Darq:
             max_burst_jobs=max_burst_jobs, job_serializer=job_serializer,
             job_deserializer=job_deserializer,
         )
-        self.redis_pool: 'ArqRedis' = None  # type: ignore
+        self.redis_pool: 'ArqRedis' = None  # type: ignore[assignment]
         self.redis_settings = redis_settings
         self.ctx = ctx
         self.on_startup = on_startup
@@ -168,16 +169,38 @@ class Darq:
                 )
             self.cron_jobs.append(cj)
 
+    @t.overload
     def task(
             self,
-            func: t.Optional[CoroutineType] = None,
+            func: WrappingFunc,
+    ) -> DarqTask[WrappingFunc]:  # pragma: no cover
+        ...
+
+    @t.overload
+    def task(
+            self,
             *,
             keep_result: t.Optional[AnyTimedelta] = None,
             timeout: t.Optional[AnyTimedelta] = None,
             max_tries: t.Optional[int] = None,
             queue: t.Optional[str] = None,
             expires: t.Union[None, AnyTimedelta, UNSET_ARG] = unset_arg,
-    ) -> t.Any:
+    ) -> t.Callable[
+        [WrappingFunc],
+        DarqTask[WrappingFunc],
+    ]:  # pragma: no cover
+        ...
+
+    def task(  # type: ignore[no-untyped-def]
+            self,
+            func=None,
+            *,
+            keep_result=None,
+            timeout=None,
+            max_tries=None,
+            queue=None,
+            expires=unset_arg,
+    ):
         """
         :param func: coroutine function
         :param keep_result: duration to keep the result for, if 0 the result
@@ -193,7 +216,7 @@ class Darq:
         task_queue = queue
         task_expires = expires
 
-        def _decorate(function: CoroutineType) -> CoroutineType:
+        def _decorate(function):  # type: ignore[no-untyped-def]
             assert asyncio.iscoroutinefunction(function), \
                 f'{function} is not a coroutine function'
             name = get_function_name(function)
@@ -264,8 +287,8 @@ class Darq:
             async def delay(*args: t.Any, **kwargs: t.Any) -> t.Optional[Job]:
                 return await apply_async(args, kwargs)
 
-            function.delay = delay  # type: ignore
-            function.apply_async = apply_async  # type: ignore
+            function.delay = delay
+            function.apply_async = apply_async
             self.registry.add(Task.new(
                 coroutine=function, name=name,
                 keep_result=keep_result, timeout=timeout, max_tries=max_tries,
@@ -274,6 +297,6 @@ class Darq:
             return function
 
         if func:
-            return _decorate(func)
+            return _decorate(func)  # type: ignore[no-untyped-call]
 
         return _decorate

@@ -17,6 +17,7 @@ Async task manager with Celery-like features. Fork of `arq <http://github.com/sa
 Features
 --------
 * Celery-like ``@task`` decorator, adds ``.delay()`` to enqueue job
+* Proper ``mypy`` type checking: all arguments passed to ``.delay()`` will be checked against the original function signature
 * Graceful shutdown: waits until running tasks are finished
 
 
