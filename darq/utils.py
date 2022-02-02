@@ -12,6 +12,7 @@ from typing import Sequence
 from typing import Union
 
 from .types import AnyCallable
+from .types import DarqTask
 
 
 epoch = datetime(1970, 1, 1)
@@ -88,7 +89,7 @@ def args_to_string(args: Sequence[Any], kwargs: Mapping[Any, Any]) -> str:
     return truncate(arguments)
 
 
-def get_function_name(func: AnyCallable) -> str:
+def get_function_name(func: t.Union[AnyCallable, DarqTask[AnyCallable]]) -> str:
     module_str = func.__module__
     if module_str == '__main__':
         module = inspect.getmodule(func)

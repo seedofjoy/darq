@@ -193,7 +193,7 @@ class Worker:
         else:
             self.health_check_key = settings.health_check_key
 
-        self.pool: 'ArqRedis' = None  # type: ignore
+        self.pool: 'ArqRedis' = None  # type: ignore[assignment]
         self.redis_settings = app.redis_settings or RedisSettings()
 
         self.tasks: t.List[asyncio.Task[t.Any]] = []
@@ -213,7 +213,7 @@ class Worker:
         self._last_health_check_log: t.Optional[str] = None
         self._add_signal_handler(signal.SIGINT, self.handle_sig)
         self._add_signal_handler(signal.SIGTERM, self.handle_sig)
-        self.on_stop = None
+        self.on_stop: t.Optional[t.Callable[[Signals], None]] = None
         # whether or not to retry jobs on Retry and CancelledError
         self.retry_jobs = settings.retry_jobs
         self.max_burst_jobs = settings.max_burst_jobs
@@ -685,7 +685,7 @@ class Worker:
         await self.app.disconnect()
         self.pool.close()
         await self.pool.wait_closed()
-        self.pool = None  # type: ignore
+        self.pool = None  # type: ignore[assignment]
 
     def __repr__(self) -> str:
         return (

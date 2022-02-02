@@ -6,12 +6,12 @@ from datetime import timedelta
 
 from pydantic.utils import import_string
 
+from .types import CoroutineType
+from .types import DarqTask
 from .utils import get_function_name
 from .utils import SecondsTimedelta
 from .utils import to_seconds
 
-R = t.TypeVar('R')
-Coro = t.TypeVar('Coro', bound=t.Callable[..., t.Awaitable[R]])
 CronIterable = t.Union[t.Set[int], t.List[int], t.Tuple[int]]
 
 
@@ -123,7 +123,7 @@ def next_cron(
 @dataclass
 class CronJob:
     name: str
-    task: t.Callable[..., t.Awaitable[R]]
+    task: DarqTask[CoroutineType]
     month: t.Union[None, CronIterable, int]
     day: t.Union[None, CronIterable, int]
     weekday: t.Union[None, CronIterable, int, str]
@@ -160,7 +160,7 @@ class CronJob:
 
 
 def cron(
-    task: t.Union[str, Coro],
+    task: t.Union[str, DarqTask[CoroutineType]],
     *,
     name: t.Optional[str] = None,
     month: t.Union[None, CronIterable, int] = None,
@@ -204,7 +204,7 @@ def cron(
         name = name or 'cron:' + task
         task = import_string(task)
 
-    task = t.cast(Coro, task)
+    task = t.cast(DarqTask[CoroutineType], task)
 
     assert asyncio.iscoroutinefunction(task), \
         f'{task} is not a coroutine function'

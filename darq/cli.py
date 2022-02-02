@@ -120,10 +120,12 @@ async def watch_reload(
         while tasks:
             tasks.pop().cancel()
 
+    def on_stop(sig: Signals) -> None:
+        if sig != Signals.SIGUSR1:
+            stop_event.set()
+
     try:
-        worker.on_stop = (
-            lambda s: s != Signals.SIGUSR1 and stop_event.set()  # type: ignore
-        )
+        worker.on_stop = on_stop
         tasks.append(loop.create_task(worker.async_run()))
         async for changes in awatch(path, stop_event=stop_event):
             click.echo(
