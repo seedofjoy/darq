@@ -17,7 +17,7 @@ long_description = '\n\n'.join((
 
 setuptools.setup(
     name='darq',
-    version=str(version.VERSION),
+    version=version.__version__,
     author='Igor Mozharovsky',
     author_email='igor.mozharovsky@gmail.com',
     description=(

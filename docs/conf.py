@@ -8,7 +8,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath('..'))
 
-from darq.version import VERSION
+from darq.version import __version__
 
 
 
@@ -18,7 +18,7 @@ project = 'darq'
 copyright = '2020, Igor Mozharovsky'
 author = 'Igor Mozharovsky'
 
-release = f'v{VERSION}'
+release = f'v{__version__}'
 
 
 # -- General configuration ---------------------------------------------------

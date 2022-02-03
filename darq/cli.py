@@ -11,7 +11,7 @@ from pydantic.utils import import_string
 from .app import Darq
 from .logs import default_log_config
 from .scheduler import run_scheduler
-from .version import VERSION
+from .version import __version__
 from .worker import check_health
 from .worker import create_worker
 from .worker import run_worker
@@ -27,7 +27,7 @@ class ContextObject(t.NamedTuple):
 
 @click.group('darq')
 @click.pass_context
-@click.version_option(str(VERSION), '-V', '--version', prog_name='darq')
+@click.version_option(__version__, '-V', '--version', prog_name='darq')
 @click.option('-A', '--app', type=str, required=True)
 @click.option('-v', '--verbose', is_flag=True, help=verbose_help)
 def cli(ctx: click.Context, *, app: str, verbose: bool) -> None:
