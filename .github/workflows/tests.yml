@@ -40,6 +40,14 @@ jobs:
     - name: Lint with flake8
       run: flake8
 
+    - name: Prepare twine checker
+      run: |
+        pip install --upgrade twine build
+        python -m build
+
+    - name: Run twine checker
+      run: twine check dist/*
+
     - name: Test with pytest
       env:
         REDIS_HOST: localhost
