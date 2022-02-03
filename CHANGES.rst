@@ -3,7 +3,7 @@
 Changelog
 ---------
 
-(unreleased)
+0.10.2(2022-02-03)
 ............
 * Add proper typing for functions wrapped with the @task decorator. Mypy will now check that parameters are passed correctly when calling ``func()`` and ``func.delay()``
 
