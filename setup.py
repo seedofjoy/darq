@@ -28,6 +28,7 @@ setuptools.setup(
     url='https://github.com/seedofjoy/darq',
     packages=['darq'],
     package_data={'darq': ['py.typed']},
+    data_files=['CHANGES.rst'],
     classifiers=[
         'Environment :: Console',
         'License :: OSI Approved :: MIT License',
