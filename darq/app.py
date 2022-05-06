@@ -185,6 +185,7 @@ class Darq:
             max_tries: t.Optional[int] = None,
             queue: t.Optional[str] = None,
             expires: t.Union[None, AnyTimedelta, UNSET_ARG] = unset_arg,
+            with_ctx: bool = False,
     ) -> t.Callable[
         [WrappingFunc],
         DarqTask[WrappingFunc],
@@ -200,6 +201,7 @@ class Darq:
             max_tries=None,
             queue=None,
             expires=unset_arg,
+            with_ctx=False,
     ):
         """
         :param func: coroutine function
@@ -212,6 +214,7 @@ class Darq:
                       different queue
         :param expires: if the task still hasn't started after this
                         duration, do not run it
+        :param with_ctx: pass context to the task as first argument
         """
         task_queue = queue
         task_expires = expires
@@ -292,6 +295,7 @@ class Darq:
             self.registry.add(Task.new(
                 coroutine=function, name=name,
                 keep_result=keep_result, timeout=timeout, max_tries=max_tries,
+                with_ctx=with_ctx
             ))
 
             return function
