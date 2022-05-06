@@ -53,6 +53,7 @@ class Task(t.NamedTuple):
     timeout_s: t.Optional[float]
     keep_result_s: t.Optional[float]
     max_tries: t.Optional[int]
+    with_ctx: bool
 
     @classmethod
     def new(
@@ -62,10 +63,12 @@ class Task(t.NamedTuple):
         timeout: t.Optional[SecondsTimedelta] = None,
         keep_result: t.Optional[SecondsTimedelta] = None,
         max_tries: t.Optional[int] = None,
+        with_ctx: bool = False,
     ) -> 'Task':
         return cls(
             name=name, coroutine=coroutine, timeout_s=to_seconds(timeout),
             keep_result_s=to_seconds(keep_result), max_tries=max_tries,
+            with_ctx=with_ctx
         )
 
 
@@ -473,11 +476,16 @@ class Worker:
                 '%6.2fs → %s(%s)%s',
                 (start_ms - enqueue_time_ms) / 1000, ref, s, extra,
             )
+
+            coro = function.coroutine
+            if function.with_ctx:
+                coro = partial(coro, ctx)
+
             # run repr(result) and extra inside try/except as they can
             # raise exceptions
             try:
                 async with async_timeout.timeout(timeout_s):
-                    result = await function.coroutine(*args, **kwargs)
+                    result = await coro(*args, **kwargs)
             except Exception as e:
                 exc_extra = getattr(e, 'extra', None)
                 if callable(exc_extra):

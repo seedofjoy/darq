@@ -110,9 +110,10 @@ async def test_task_parametrized(darq):
     keep_result = 0.5
     max_tries = 92
     queue = 'my_queue'
+    with_ctx = True
     foobar_task = darq.task(
         keep_result=keep_result, timeout=timeout,
-        max_tries=max_tries, queue=queue,
+        max_tries=max_tries, queue=queue, with_ctx=with_ctx
     )(foobar)
 
     task_name = 'tests.test_app.foobar'
@@ -123,6 +124,7 @@ async def test_task_parametrized(darq):
     assert task.coroutine == foobar_task
     assert task.timeout_s == timeout
     assert task.keep_result_s == keep_result
+    assert task.with_ctx == with_ctx
 
 
 async def test_task_self_enqueue(darq, caplog, worker_factory):
@@ -385,3 +387,49 @@ async def test_expires_param(
         **expected_kwargs,
     )
     await darq.disconnect()
+
+
+async def foobar_with_ctx(ctx, a: int) -> int:
+    return 42 + a + ctx['b']
+
+
+@pytest.mark.parametrize('func_args,func_kwargs,func_ctx,result', [
+    ((1,), {}, {'b': 1}, 44),
+    ((), {'a': 2}, {'b': 1}, 45),
+])
+async def test_run_task_with_ctx(
+        func_args, func_kwargs, func_ctx, result,
+        arq_redis, caplog, worker_factory
+):
+    caplog.set_level(logging.INFO)
+
+    async def on_worker_startup(ctx):
+        ctx.update(func_ctx)
+
+    darq = Darq(
+        redis_settings=redis_settings,
+        burst=True,
+        on_startup=on_worker_startup,
+    )
+
+    foobar_with_ctx_task = darq.task(foobar_with_ctx, with_ctx=True)
+
+    await darq.connect()
+
+    job_id = 'testing'
+    function_name = 'tests.test_app.foobar_with_ctx'
+    await foobar_with_ctx_task.apply_async(
+        func_args, func_kwargs, job_id=job_id
+    )
+
+    worker = worker_factory(darq)
+    await worker.main()
+
+    assert_worker_job_finished(
+        records=caplog.records,
+        job_id=job_id,
+        function_name=function_name,
+        result=result,
+        args=func_args,
+        kwargs=func_kwargs,
+    )
