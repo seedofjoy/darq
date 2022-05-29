@@ -6,12 +6,13 @@ Changelog
 (unreleased)
 ............
 * Added ability to optionally pass ``ctx`` to the task, like this:
-.. code-block:: python
-   :caption: ok
-   @task(with_ctx=True)
-   def foobar(ctx):
-    log.info('Foobar try %s', ctx['job_try'])
-``ctx`` contains: ``job_id``, ``job_try``, ``enqueue_time``, ``score``, ``metadata`` + all worker's ``ctx`` (including custom context which can be passed via ``on_startup``)
+.. code:: python
+
+  @task(with_ctx=True)
+  def foobar(ctx):
+      log.info('Foobar try %s', ctx['job_try'])
+ 
+``ctx`` contains: ``job_id``, ``job_try``, ``enqueue_time``, ``score``, ``metadata`` + all worker's ``ctx`` (including custom context which can be passed via ``on_startup``). Thanks to `@kindermax <https://github.com/kindermax>`_ (https://github.com/seedofjoy/darq/pull/426) !
 
 0.10.2 (2022-02-03)
 ...................
