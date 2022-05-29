@@ -295,7 +295,7 @@ class Darq:
             self.registry.add(Task.new(
                 coroutine=function, name=name,
                 keep_result=keep_result, timeout=timeout, max_tries=max_tries,
-                with_ctx=with_ctx
+                with_ctx=with_ctx,
             ))
 
             return function

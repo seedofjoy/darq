@@ -68,7 +68,7 @@ class Task(t.NamedTuple):
         return cls(
             name=name, coroutine=coroutine, timeout_s=to_seconds(timeout),
             keep_result_s=to_seconds(keep_result), max_tries=max_tries,
-            with_ctx=with_ctx
+            with_ctx=with_ctx,
         )
 
 
