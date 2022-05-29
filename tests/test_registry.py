@@ -15,12 +15,12 @@ def test_registry():
     task_name = 'foobar_task'
     worker_task = Task(
         name=task_name, coroutine=foobar, timeout_s=None, keep_result_s=None,
-        max_tries=None,
+        max_tries=None, with_ctx=False,
     )
     task_name_2 = 'foobar_2_task'
     worker_task_2 = Task(
         name=task_name_2, coroutine=foobar_2, timeout_s=None,
-        keep_result_s=None, max_tries=None,
+        keep_result_s=None, max_tries=None, with_ctx=False,
     )
 
     registry.add(worker_task)

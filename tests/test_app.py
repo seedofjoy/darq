@@ -113,7 +113,7 @@ async def test_task_parametrized(darq):
     with_ctx = True
     foobar_task = darq.task(
         keep_result=keep_result, timeout=timeout,
-        max_tries=max_tries, queue=queue, with_ctx=with_ctx
+        max_tries=max_tries, queue=queue, with_ctx=with_ctx,
     )(foobar)
 
     task_name = 'tests.test_app.foobar'
@@ -399,7 +399,7 @@ async def foobar_with_ctx(ctx, a: int) -> int:
 ])
 async def test_run_task_with_ctx(
         func_args, func_kwargs, func_ctx, result,
-        arq_redis, caplog, worker_factory
+        arq_redis, caplog, worker_factory,
 ):
     caplog.set_level(logging.INFO)
 
@@ -419,7 +419,7 @@ async def test_run_task_with_ctx(
     job_id = 'testing'
     function_name = 'tests.test_app.foobar_with_ctx'
     await foobar_with_ctx_task.apply_async(
-        func_args, func_kwargs, job_id=job_id
+        func_args, func_kwargs, job_id=job_id,
     )
 
     worker = worker_factory(darq)
