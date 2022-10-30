@@ -3,6 +3,10 @@
 Changelog
 ---------
 
+0.11.1 (unreleased)
+...................
+* Remove ``pydantic`` dependency
+
 0.11.0 (2022-08-03)
 ...................
 * Added ability to optionally pass ``ctx`` to the task, like this:

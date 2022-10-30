@@ -4,11 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
 
-from pydantic.utils import import_string
-
 from .types import CoroutineType
 from .types import DarqTask
 from .utils import get_function_name
+from .utils import import_string
 from .utils import SecondsTimedelta
 from .utils import to_seconds
 
