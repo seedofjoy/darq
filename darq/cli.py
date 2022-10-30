@@ -6,11 +6,11 @@ import typing as t
 from signal import Signals
 
 import click
-from pydantic.utils import import_string
 
 from .app import Darq
 from .logs import default_log_config
 from .scheduler import run_scheduler
+from .utils import import_string
 from .version import __version__
 from .worker import check_health
 from .worker import create_worker
