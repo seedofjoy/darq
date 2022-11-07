@@ -1,11 +1,12 @@
+import asyncio
 import datetime
 import logging
 import re
 from unittest.mock import call
+from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
-from asynctest import CoroutineMock
-from asynctest import patch
 
 from darq import Darq
 from darq.app import DarqConnectionError
@@ -174,9 +175,15 @@ async def test_on_job_callbacks(
             'job_try': None,
         }
 
-    on_job_prerun = CoroutineMock()
-    on_job_postrun = CoroutineMock()
-    on_job_prepublish = CoroutineMock(side_effect=prepublish_side_effect)
+    on_job_prerun_future = asyncio.Future()
+    on_job_prerun_future.set_result(None)
+    on_job_prerun = Mock(return_value=on_job_prerun_future)
+
+    on_job_postrun_future = asyncio.Future()
+    on_job_postrun_future.set_result(None)
+    on_job_postrun = Mock(return_value=on_job_postrun_future)
+
+    on_job_prepublish = Mock(side_effect=prepublish_side_effect)
 
     darq = Darq(
         redis_settings=redis_settings,

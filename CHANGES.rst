@@ -6,6 +6,7 @@ Changelog
 0.11.1 (unreleased)
 ...................
 * Remove ``pydantic`` dependency
+* Remove ``aioredis`` from dependencies to allow choose between ``aioredis`` and ``evo-aioredis`` - fork with Python 3.11 compatability
 
 0.11.0 (2022-08-03)
 ...................

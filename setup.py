@@ -38,6 +38,7 @@ setuptools.setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
         'Typing :: Typed',
     ],
     entry_points={
@@ -45,7 +46,6 @@ setuptools.setup(
     },
     install_requires=[
         'async-timeout>=3.0.0, <5.0',
-        'aioredis>=1.1.0, <2.0',
         'click>=6.7',
         'typing_extensions>=4.0; python_version<"3.8"',
     ],
