@@ -21,6 +21,25 @@ Features
 * Graceful shutdown: waits until running tasks are finished
 
 
+Installation
+------------
+Darq uses ``aioredis`` 1.x as Redis client. Unfortunately, this library has been abandoned, and does not support Python 3.11. I made a fork with compatability fixes: ``evo-aioredis`` (https://github.com/evo-company/aioredis-py).
+
+Because of this, ``aioredis`` is not currently added as Darq dependency, and you must install it yourself:
+
+For Python<3.11 you can use:
+
+.. code:: shell
+
+   pip install aioredis<2.0.0
+
+For Python 3.11 (and older versions too) you can use fork:
+
+.. code:: shell
+
+   pip install evo-aioredis<2.0.0
+
+
 Quick start
 -----------
 
