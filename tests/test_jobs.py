@@ -2,7 +2,6 @@ import asyncio
 import pickle
 
 import pytest
-from pytest_toolbox.comparison import CloseToNow
 
 from darq.constants import default_queue_name
 from darq.constants import in_progress_key_prefix
@@ -14,6 +13,7 @@ from darq.jobs import Job
 from darq.jobs import JobResult
 from darq.jobs import JobStatus
 from darq.jobs import serialize_result
+from .utils import CloseToNow
 
 
 async def test_job_in_progress(arq_redis):

@@ -7,8 +7,6 @@ from random import shuffle
 from time import time
 
 import pytest
-from pytest_toolbox.comparison import AnyInt
-from pytest_toolbox.comparison import CloseToNow
 
 from darq.constants import default_queue_name
 from darq.jobs import Job
@@ -17,6 +15,8 @@ from darq.jobs import SerializationError
 from darq.utils import timestamp_ms
 from darq.worker import Retry
 from darq.worker import Worker
+from .utils import AnyInt
+from .utils import CloseToNow
 
 
 async def foobar():
