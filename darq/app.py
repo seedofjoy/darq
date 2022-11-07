@@ -278,9 +278,11 @@ class Darq:
                     'expires': expires, 'job_try': job_try,
                 })
 
-                self.on_job_prepublish and await self.on_job_prepublish(
-                    metadata, self.registry[name], args, kwargs, job_options,
-                )
+                if self.on_job_prepublish:
+                    await self.on_job_prepublish(
+                        metadata, self.registry[name], args, kwargs,
+                        job_options,
+                    )
                 if metadata:
                     kwargs['__metadata__'] = metadata
                 return await self.redis_pool.enqueue_job(
