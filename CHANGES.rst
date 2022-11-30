@@ -3,8 +3,9 @@
 Changelog
 ---------
 
-0.11.1 (unreleased)
+0.11.1 (2022-11-30)
 ...................
+* Add Python 3.11 support (with ``evo-aioredis`` dependency instead of ``aioredis``)
 * Remove ``pydantic`` dependency
 * Remove ``aioredis`` from dependencies to allow choose between ``aioredis`` and ``evo-aioredis`` - fork with Python 3.11 compatability
 
