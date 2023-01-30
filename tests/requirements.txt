@@ -7,7 +7,7 @@ flake8==6.0.0
 flake8-quotes==3.3.2
 flake8-bugbear==23.1.20
 flake8-builtins==2.1.0
-flake8-import-order==0.18.1
+flake8-import-order==0.18.2
 flake8-print==5.0.0
 flake8-commas==2.1.0
 typing_extensions==4.0  # pyup: ignore # it should be minimal version from setup.py
