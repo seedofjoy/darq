@@ -3,7 +3,7 @@ pytest-aiohttp==1.0.5
 pytest-mock==3.11.1
 pytest-cov==4.1.0
 mypy==1.6.0
-flake8==5.0.4
+flake8==6.1.0
 flake8-quotes==3.3.1
 flake8-bugbear==22.10.27
 flake8-builtins==2.0.0
