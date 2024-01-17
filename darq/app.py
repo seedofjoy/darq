@@ -148,6 +148,7 @@ class Darq:
 
         self.redis_pool.close()
         await self.redis_pool.wait_closed()
+        self.redis_pool = None
 
     def autodiscover_tasks(self, packages: t.Sequence[str]) -> None:
         for pkg in packages:
