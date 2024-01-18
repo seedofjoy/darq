@@ -3,6 +3,10 @@
 Changelog
 ---------
 
+0.11.2 (2024-01-18)
+...................
+* Fix reconnecting after disconnect (thanks to `@heimtathurs <https://github.com/heimtathurs>`_)
+
 0.11.1 (2022-11-30)
 ...................
 * Add Python 3.11 support (with ``evo-aioredis`` dependency instead of ``aioredis``)

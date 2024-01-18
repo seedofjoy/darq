@@ -118,7 +118,7 @@ class Darq:
             max_burst_jobs=max_burst_jobs, job_serializer=job_serializer,
             job_deserializer=job_deserializer,
         )
-        self.redis_pool: 'ArqRedis' = None  # type: ignore[assignment]
+        self.redis_pool: t.Optional['ArqRedis'] = None
         self.redis_settings = redis_settings
         self.ctx = ctx
         self.on_startup = on_startup
