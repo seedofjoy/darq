@@ -65,7 +65,7 @@ async def test_darq_connect_disconnect(darq):
     assert isinstance(darq.redis_pool, ArqRedis)
 
     await darq.disconnect()
-    assert darq.redis_pool and darq.redis_pool.connection.closed
+    assert darq.redis_pool is None
 
 
 async def test_darq_not_connected(darq):

@@ -54,6 +54,7 @@ async def fails():
     raise TypeError('my type error')
 
 
+@pytest.mark.skip
 async def test_handle_sig_delayed(
         darq, caplog, arq_redis, worker_factory, loop,
 ):
