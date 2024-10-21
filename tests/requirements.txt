@@ -6,7 +6,7 @@ mypy==1.12.1
 flake8==7.1.1
 flake8-quotes==3.4.0
 flake8-bugbear==24.8.19
-flake8-builtins==2.0.0
+flake8-builtins==2.5.0
 flake8-import-order==0.18.1
 flake8-print==5.0.0
 flake8-commas==2.1.0
