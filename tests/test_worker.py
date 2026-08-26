@@ -331,25 +331,37 @@ async def test_retry_lots_check(darq, arq_redis, worker_factory, caplog):
         await worker.run_check()
 
 
-@pytest.mark.skip(reason='Jobs with "ctx" does not ready')
 async def test_cancel_error(darq, arq_redis, worker_factory, caplog):
-    async def retry(ctx):
-        if ctx['job_try'] == 1:
+    calls = 0
+
+    async def cancel_once():
+        nonlocal calls
+        calls += 1
+        if calls == 1:
             raise asyncio.CancelledError()
 
     caplog.set_level(logging.INFO)
-    await arq_redis.enqueue_job('retry', _job_id='testing')
+    cancel_task = darq.task(cancel_once)
+    await darq.connect()
+
+    job = await cancel_task.apply_async([], {}, job_id='testing')
     worker = worker_factory(darq)
     await worker.main()
+    assert calls == 2
     assert worker.jobs_complete == 1
     assert worker.jobs_failed == 0
     assert worker.jobs_retried == 1
+    assert await job.result(pole_delay=0) is None
+    assert (await job.result_info()).job_try == 2
 
     log = re.sub(
         r'\d+.\d\ds', 'X.XXs',
         '\n'.join(r.message for r in caplog.records),
     )
-    assert 'X.XXs ↻ testing:retry cancelled, will be run again' in log
+    assert (
+        'X.XXs ↻ testing:tests.test_worker.cancel_once cancelled, '
+        'will be run again'
+    ) in log
 
 
 async def test_job_expired(darq, arq_redis, worker_factory, caplog):
