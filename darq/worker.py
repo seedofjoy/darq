@@ -493,6 +493,12 @@ class Worker:
                 raise
             else:
                 result_str = '' if result is None else truncate(repr(result))
+        except asyncio.CancelledError:
+            if self.retry_jobs:
+                finished_ms = timestamp_ms()
+                t_ = (finished_ms - start_ms) / 1000
+                log.info('%6.2fs ↻ %s cancelled, will be run again', t_, ref)
+                self.jobs_retried += 1
         except Exception as e:
             finished_ms = timestamp_ms()
             t_ = (finished_ms - start_ms) / 1000
@@ -504,9 +510,6 @@ class Worker:
                 )
                 if e.defer_score:
                     incr_score = e.defer_score + (timestamp_ms() - score)
-                self.jobs_retried += 1
-            elif self.retry_jobs and isinstance(e, asyncio.CancelledError):
-                log.info('%6.2fs ↻ %s cancelled, will be run again', t_, ref)
                 self.jobs_retried += 1
             else:
                 log.exception(
