@@ -3,6 +3,11 @@
 Changelog
 ---------
 
+0.11.3 (2026-08-27)
+...................
+* Handle asyncio.CancelledError separately during job execution
+* Keep cancelled jobs queued for retry when retry_jobs is enabled
+
 0.11.2 (2024-01-18)
 ...................
 * Fix reconnecting after disconnect (thanks to `@heimtathurs <https://github.com/heimtathurs>`_)
